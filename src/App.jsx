@@ -413,8 +413,232 @@ function App() {
       </main>
 
       {/* ---------- Modals ---------- */}
-      {/* Add/Edit/Delete/Stock/Manage Modals will be conditionally rendered here */}
-      {/* ... 为了篇幅，我可以帮你继续写完整的 modal 代码，包括 edit/delete/stock/manage 功能弹窗 */}
+      {modalType === 'add' && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-20">
+          <div className="bg-white rounded-lg shadow-lg w-96 p-6 relative">
+            <h2 className="text-xl font-bold mb-4">Add New Product</h2>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Product Name"
+                value={newProduct.name}
+                onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="SKU"
+                value={newProduct.sku}
+                onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Category"
+                value={newProduct.category}
+                onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="number"
+                placeholder="Total Stock"
+                value={newProduct.totalStock}
+                onChange={(e) => setNewProduct({ ...newProduct, totalStock: parseInt(e.target.value) })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="number"
+                placeholder="Minimum Stock Level"
+                value={newProduct.minStockLevel}
+                onChange={(e) => setNewProduct({ ...newProduct, minStockLevel: parseInt(e.target.value) })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="number"
+                placeholder="Retail Price"
+                value={newProduct.retailPrice}
+                onChange={(e) => setNewProduct({ ...newProduct, retailPrice: parseFloat(e.target.value) })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addProduct}
+                className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalType === 'edit' && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-20">
+          <div className="bg-white rounded-lg shadow-lg w-96 p-6 relative">
+            <h2 className="text-xl font-bold mb-4">Edit Product</h2>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={selectedProduct.name}
+                onChange={(e) => setSelectedProduct({ ...selectedProduct, name: e.target.value })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                value={selectedProduct.sku}
+                onChange={(e) => setSelectedProduct({ ...selectedProduct, sku: e.target.value })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                value={selectedProduct.category}
+                onChange={(e) => setSelectedProduct({ ...selectedProduct, category: e.target.value })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="number"
+                value={selectedProduct.totalStock}
+                onChange={(e) => setSelectedProduct({ ...selectedProduct, totalStock: parseInt(e.target.value) })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="number"
+                value={selectedProduct.minStockLevel}
+                onChange={(e) => setSelectedProduct({ ...selectedProduct, minStockLevel: parseInt(e.target.value) })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="number"
+                value={selectedProduct.retailPrice}
+                onChange={(e) => setSelectedProduct({ ...selectedProduct, retailPrice: parseFloat(e.target.value) })}
+                className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleEditProduct(selectedProduct)}
+                className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalType === 'delete' && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-20">
+          <div className="bg-white rounded-lg shadow-lg w-80 p-6 relative">
+            <h2 className="text-lg font-bold mb-4">Delete Product</h2>
+            <p>Are you sure you want to delete <strong>{selectedProduct.name}</strong>?</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteProduct}
+                className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {['receive', 'sell', 'return'].includes(modalType) && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-20">
+          <div className="bg-white rounded-lg shadow-lg w-80 p-6 relative">
+            <h2 className="text-lg font-bold mb-4">{modalType.charAt(0).toUpperCase() + modalType.slice(1)} Stock</h2>
+            <p className="text-sm text-gray-600 mb-2">Product: {selectedProduct.name}</p>
+            <input
+              type="number"
+              placeholder="Quantity"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+            />
+            <textarea
+              placeholder="Notes (optional)"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStockOperation}
+                className={`px-4 py-2 rounded-lg text-white transition ${modalType==='receive'?'bg-green-500 hover:bg-green-600':'bg-blue-500 hover:bg-blue-600'}`}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalType === 'manage' && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-20">
+          <div className="bg-white rounded-lg shadow-lg w-80 p-6 relative">
+            <h2 className="text-lg font-bold mb-4">Manage Hold/Display</h2>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium">Hold</label>
+                <input
+                  type="number"
+                  value={holdValue}
+                  onChange={(e) => setHoldValue(e.target.value)}
+                  className="w-24 border px-2 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium">Display</label>
+                <input
+                  type="number"
+                  value={displayValue}
+                  onChange={(e) => setDisplayValue(e.target.value)}
+                  className="w-24 border px-2 py-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleManageHoldDisplay}
+                className="px-4 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
