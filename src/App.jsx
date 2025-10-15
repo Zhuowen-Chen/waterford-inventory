@@ -142,27 +142,31 @@ function App() {
       alert('Please fill in Product Name and SKU');
       return;
     }
-
+  
     try {
       const productRef = doc(db, 'products', editingProduct.id);
-      await updateDoc(productRef, {
+      
+      // 准备更新数据，过滤掉 undefined 值
+      const updateData = {
         name: editingProduct.name,
         sku: editingProduct.sku,
-        collection: editingProduct.collection,
-        subCollection: editingProduct.subCollection,
-        category: editingProduct.category,
-        totalStock: editingProduct.totalStock,
-        minStockLevel: editingProduct.minStockLevel,
-        retailPrice: editingProduct.retailPrice,
+        collection: editingProduct.collection || 'Other',
+        subCollection: editingProduct.subCollection || 'Uncategorized',
+        category: editingProduct.category || 'Stemware',
+        totalStock: editingProduct.totalStock || 0,
+        minStockLevel: editingProduct.minStockLevel || 2,
+        retailPrice: editingProduct.retailPrice || 0,
         updatedAt: serverTimestamp()
-      });
-
+      };
+  
+      await updateDoc(productRef, updateData);
+  
       setModalType(null);
       setEditingProduct(null);
       alert('Product updated successfully!');
     } catch (error) {
       console.error('Error updating product:', error);
-      alert('Failed to update product');
+      alert('Failed to update product: ' + error.message);
     }
   };
 
