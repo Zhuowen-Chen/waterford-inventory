@@ -875,7 +875,7 @@ function App() {
             <div className="mb-4">
               <p className="text-sm text-gray-600 mb-1">Product</p>
               <p className="font-medium">{selectedProduct.name}</p>
-              <p className="text-sm text-gray-500">SKU: {selectedProduct.sku}</p>
+              <p className="text-sm text-gray-500">Article No: {selectedProduct.sku}</p>
             </div>
 
             <div className="mb-4">
