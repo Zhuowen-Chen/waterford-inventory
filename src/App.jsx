@@ -3,7 +3,7 @@ import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock
 import { db } from './firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 
-// Waterford Collections Structure
+// Waterford Collections Structure - Simplified
 const MAIN_CATEGORIES = {
   'Collections': [
     'Mastercraft', 
@@ -21,9 +21,6 @@ const MAIN_CATEGORIES = {
     'Gin Journeys',
     'Craft Brew',
     'Marquis',
-    'Waterford × Elton John'
-  ],
-  'Glassware & Bar': [
     'Wine Glasses',
     'White Wine',
     'Red Wine',
@@ -42,9 +39,7 @@ const MAIN_CATEGORIES = {
     'Ice Buckets',
     'Pitchers & Jugs',
     'Spirit Decanters',
-    'Wine Decanters & Carafes'
-  ],
-  'Home': [
+    'Wine Decanters & Carafes',
     'Crystal Vases',
     'Crystal Bowls',
     'Photo Frames',
@@ -54,7 +49,8 @@ const MAIN_CATEGORIES = {
     'Desk Accessories',
     'Dressing Table Items',
     'Home Bar',
-    'Cocktail Essentials'
+    'Cocktail Essentials',
+    'Waterford × Elton John'
   ],
   'Christmas': [
     'Holiday Heirlooms',
@@ -95,9 +91,8 @@ function App() {
   const [newProduct, setNewProduct] = useState({
     name: '',
     sku: '',
-    collection: 'Lismore',
-    subCollection: 'Lismore Diamond',
-    category: 'Stemware',
+    mainCategory: 'Collections',
+    subCategory: MAIN_CATEGORIES['Collections']?.[0] || 'Mastercraft',  // 👈 动态获取第一个
     totalStock: 0,
     minStockLevel: 2,
     retailPrice: 0
@@ -466,6 +461,7 @@ function App() {
         {showFilters && (
           <div className="mb-6 p-4 bg-white rounded-lg border border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Collection</label>
                 <select
@@ -708,22 +704,22 @@ function App() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Collection</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Main Category</label>
                 <select
-                  value={modalType === 'edit' ? editingProduct?.collection : newProduct.collection}
+                  value={modalType === 'edit' ? editingProduct?.mainCategory : newProduct.mainCategory}
                   onChange={(e) => {
-                    const newColl = e.target.value;
-                    const firstSub = COLLECTIONS[newColl][0];
+                    const newCat = e.target.value;
+                    const firstSub = MAIN_CATEGORIES[newCat][0];  // 👈 获取第一个子分类
                     if (modalType === 'edit') {
-                      setEditingProduct({...editingProduct, collection: newColl, subCollection: firstSub});
+                      setEditingProduct({...editingProduct, mainCategory: newCat, subCategory: firstSub});
                     } else {
-                      setNewProduct({...newProduct, collection: newColl, subCollection: firstSub});
+                      setNewProduct({...newProduct, mainCategory: newCat, subCategory: firstSub});
                     }
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
-                  {Object.keys(COLLECTIONS).map(col => (
-                    <option key={col} value={col}>{col}</option>
+                  {Object.keys(MAIN_CATEGORIES).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
               </div>
@@ -731,14 +727,14 @@ function App() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sub-Collection</label>
                 <select
-                  value={modalType === 'edit' ? editingProduct?.subCollection : newProduct.subCollection}
+                  value={modalType === 'edit' ? editingProduct?.subCategory : newProduct.subCategory}
                   onChange={(e) => modalType === 'edit'
-                    ? setEditingProduct({...editingProduct, subCollection: e.target.value})
-                    : setNewProduct({...newProduct, subCollection: e.target.value})
+                    ? setEditingProduct({...editingProduct, subCategory: e.target.value})
+                    : setNewProduct({...newProduct, subCategory: e.target.value})
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
-                  {COLLECTIONS[modalType === 'edit' ? editingProduct?.collection : newProduct.collection]?.map(sub => (
+                  {MAIN_CATEGORIES[modalType === 'edit' ? editingProduct?.mainCategory : newProduct.mainCategory]?.map(sub => (
                     <option key={sub} value={sub}>{sub}</option>
                   ))}
                 </select>
