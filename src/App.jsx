@@ -159,9 +159,33 @@ function App() {
     return grouped;
   }, [filteredProducts]);
 
+  // Check if product already exists
+  const checkDuplicateProduct = (name, sku) => {
+    const duplicateBySku = products.find(p => p.sku.toLowerCase() === sku.toLowerCase());
+    const duplicateByName = products.find(p => p.name.toLowerCase() === name.toLowerCase());
+    
+    if (duplicateBySku) {
+      return `A product with Article Number "${sku}" already exists: ${duplicateBySku.name}`;
+    }
+    
+    if (duplicateByName) {
+      return `A product with name "${name}" already exists (Article No: ${duplicateByName.sku})`;
+    }
+    
+    return null;
+  };
+
+
   const handleAddProduct = async () => {
     if (!newProduct.name || !newProduct.sku) {
-      alert('Please fill in Product Name and SKU');
+      alert('Please fill in Product Name and Article Number');
+      return;
+    }
+
+    // Check for duplicates
+    const duplicateError = checkDuplicateProduct(newProduct.name, newProduct.sku);
+    if (duplicateError) {
+      alert(duplicateError);
       return;
     }
 
@@ -178,9 +202,8 @@ function App() {
       setNewProduct({
         name: '',
         sku: '',
-        collection: 'Lismore',
-        subCollection: 'Lismore Diamond',
-        category: 'Stemware',
+        mainCategory: 'Collections',
+        subCategory: 'Lismore Diamond',
         totalStock: 0,
         minStockLevel: 2,
         retailPrice: 0
@@ -195,28 +218,47 @@ function App() {
 
   const handleEditProduct = async () => {
     if (!editingProduct.name || !editingProduct.sku) {
-      alert('Please fill in Product Name and SKU');
+      alert('Please fill in Product Name and Article Number');
       return;
     }
-  
+
+    // Check for duplicates (excluding current product)
+    const duplicateBySku = products.find(p => 
+      p.id !== editingProduct.id && 
+      p.sku.toLowerCase() === editingProduct.sku.toLowerCase()
+    );
+    
+    const duplicateByName = products.find(p => 
+      p.id !== editingProduct.id && 
+      p.name.toLowerCase() === editingProduct.name.toLowerCase()
+    );
+    
+    if (duplicateBySku) {
+      alert(`A product with Article Number "${editingProduct.sku}" already exists: ${duplicateBySku.name}`);
+      return;
+    }
+    
+    if (duplicateByName) {
+      alert(`A product with name "${editingProduct.name}" already exists (Article No: ${duplicateByName.sku})`);
+      return;
+    }
+
     try {
       const productRef = doc(db, 'products', editingProduct.id);
       
-      // 准备更新数据，过滤掉 undefined 值
       const updateData = {
         name: editingProduct.name,
         sku: editingProduct.sku,
-        collection: editingProduct.collection || 'Other',
-        subCollection: editingProduct.subCollection || 'Uncategorized',
-        category: editingProduct.category || 'Stemware',
+        mainCategory: editingProduct.mainCategory || 'Collections',
+        subCategory: editingProduct.subCategory || 'Lismore Diamond',
         totalStock: editingProduct.totalStock || 0,
         minStockLevel: editingProduct.minStockLevel || 2,
         retailPrice: editingProduct.retailPrice || 0,
         updatedAt: serverTimestamp()
       };
-  
+
       await updateDoc(productRef, updateData);
-  
+
       setModalType(null);
       setEditingProduct(null);
       alert('Product updated successfully!');
@@ -412,7 +454,7 @@ function App() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Search by product name or SKU..."
+              placeholder="Search by product name or article number..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -520,7 +562,7 @@ function App() {
                               <div>
                                 <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
                                 <p className="text-sm text-gray-500 mt-1">
-                                  SKU: {product.sku} | {product.category}
+                                  Article No: {product.sku} | {product.category}
                                 </p>
                               </div>
                               <div className="flex gap-1 ml-4">
@@ -652,7 +694,7 @@ function App() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">SKU *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Product Article Number *</label>
                 <input
                   type="text"
                   value={modalType === 'edit' ? editingProduct?.sku : newProduct.sku}
@@ -801,7 +843,7 @@ function App() {
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-medium text-gray-900">{t.productName}</p>
-                        <p className="text-sm text-gray-500">SKU: {t.productSku}</p>
+                        <p className="text-sm text-gray-500">Article No: {t.productSku}</p>
                       </div>
                       <span className={`px-2 py-1 text-xs rounded ${
                         t.type === 'receive' ? 'bg-green-100 text-green-700' :
