@@ -4,16 +4,72 @@ import { db } from './firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 
 // Waterford Collections Structure
-const COLLECTIONS = {
-  'Lismore': ['Lismore Diamond', 'Lismore Essence', 'Lismore Classic', 'Lismore Connoisseur'],
-  'Elegance': ['Elegance Optic', 'Elegance Classic'],
-  'Marquis': ['Marquis by Waterford'],
-  'Wild Atlantic Way': ['Wild Atlantic Way'],
-  'Gin Journeys': ['Gin Journeys'],
-  'Mixology': ['Mixology Collection'],
-  'Contemporary': ['Contemporary Designs'],
-  'Other': ['Uncategorized']
+const MAIN_CATEGORIES = {
+  'Collections': [
+    'Mastercraft', 
+    'Lismore Red', 
+    'Lismore', 
+    'Lismore Essence', 
+    'Lismore Arcus', 
+    'Lismore Tall', 
+    'Lismore Black', 
+    'Lismore Diamond',
+    'Connoisseur',
+    'Elegance',
+    'Elegance Optic',
+    'Mixology',
+    'Gin Journeys',
+    'Craft Brew',
+    'Marquis',
+    'Waterford × Elton John'
+  ],
+  'Glassware & Bar': [
+    'Wine Glasses',
+    'White Wine',
+    'Red Wine',
+    'Stemless Wine',
+    'Champagne Flutes',
+    'Champagne Coupes',
+    'Whiskey Glasses',
+    'Gin Balloons & Glasses',
+    'Beer & Lager Glasses',
+    'Brandy Glasses',
+    'Martini & Cocktail Glasses',
+    'Shot Glasses',
+    'Highballs',
+    'Tumblers',
+    'Cocktail Shakers',
+    'Ice Buckets',
+    'Pitchers & Jugs',
+    'Spirit Decanters',
+    'Wine Decanters & Carafes'
+  ],
+  'Home': [
+    'Crystal Vases',
+    'Crystal Bowls',
+    'Photo Frames',
+    'Clocks',
+    'Candleholders & Votives',
+    'Lanterns and Hurricanes',
+    'Desk Accessories',
+    'Dressing Table Items',
+    'Home Bar',
+    'Cocktail Essentials'
+  ],
+  'Christmas': [
+    'Holiday Heirlooms',
+    'Winter Wonders',
+    'Christmas Mastercraft',
+    'Christmas Ornaments',
+    'Crystal Ornaments',
+    'Festive Accessories',
+    'Christmas Drinkware',
+    'Christmas Gifts'
+  ]
 };
+
+// Keep for backward compatibility
+const COLLECTIONS = MAIN_CATEGORIES;
 
 const CATEGORIES = ['Stemware', 'Barware', 'Giftware', 'Home Décor', 'Lighting', 'Other'];
 
