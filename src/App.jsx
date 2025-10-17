@@ -103,20 +103,24 @@ function App() {
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           p.sku.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCollection = selectedCollection === 'All' || p.collection === selectedCollection;
-      const matchesSubCollection = selectedSubCollection === 'All' || p.subCollection === selectedSubCollection;
-      const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+                          p.sku.toLowerCase().includes(searchTerm.toLowerCase());
+      const mainCat = p.mainCategory || 'Collections';
+      const subCat = p.subCategory || 'Other';
       
-      return matchesSearch && matchesCollection && matchesSubCollection && matchesCategory;
+      const matchesMain = selectedCollection === 'All' || mainCat === selectedCollection;
+      const matchesSub = selectedSubCollection === 'All' || subCat === selectedSubCollection;
+      
+      return matchesSearch && matchesMain && matchesSub;
     });
-  }, [products, searchTerm, selectedCollection, selectedSubCollection, selectedCategory]);
+  }, [products, searchTerm, selectedCollection, selectedSubCollection]);
 
-  // Group products by collection
+  // Group products by category
   const groupedProducts = useMemo(() => {
     const grouped = {};
     filteredProducts.forEach(product => {
-      const key = `${product.collection} > ${product.subCollection}`;
+      const mainCat = product.mainCategory || 'Collections';
+      const subCat = product.subCategory || 'Other';
+      const key = `${mainCat} > ${subCat}`;
       if (!grouped[key]) {
         grouped[key] = [];
       }
@@ -147,29 +151,47 @@ function App() {
       alert('Please fill in Product Name and Article Number');
       return;
     }
-
+  
     // Check for duplicates
     const duplicateError = checkDuplicateProduct(newProduct.name, newProduct.sku);
     if (duplicateError) {
       alert(duplicateError);
       return;
     }
-
+  
     try {
+      // 添加调试
+      console.log('Adding product with data:', {
+        name: newProduct.name,
+        sku: newProduct.sku,
+        mainCategory: newProduct.mainCategory,
+        subCategory: newProduct.subCategory,
+        totalStock: newProduct.totalStock,
+      });
+
       await addDoc(collection(db, 'products'), {
-        ...newProduct,
+        name: newProduct.name,
+        sku: newProduct.sku,
+        mainCategory: newProduct.mainCategory,
+        subCategory: newProduct.subCategory,
+        totalStock: newProduct.totalStock,
+        minStockLevel: newProduct.minStockLevel,
+        retailPrice: newProduct.retailPrice,
         onHold: 0,
         onDisplay: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+
+      // 添加调试
+      console.log('Product added successfully to Firebase');
       
       setShowAddProduct(false);
       setNewProduct({
         name: '',
         sku: '',
         mainCategory: 'Collections',
-        subCategory: 'Lismore Diamond',
+        subCategory: MAIN_CATEGORIES['Collections'][0],
         totalStock: 0,
         minStockLevel: 2,
         retailPrice: 0
@@ -282,13 +304,42 @@ function App() {
       case 'receive':
         newTotal += qty;
         break;
-      case 'sell':
-        if (getAvailable(selectedProduct) < qty) {
-          alert('Insufficient available stock!');
-          return;
-        }
-        newTotal -= qty;
-        break;
+        case 'sell': {
+          const available = getAvailable(selectedProduct);
+          
+          // 检查总库存是否足够
+          if (selectedProduct.totalStock < qty) {
+            alert('Insufficient total stock!');
+            return;
+          }
+          
+          // 如果可用库存不足，但有 Display 或 Hold，给出警告
+          if (available < qty) {
+            const deficit = qty - available;
+            const onHold = selectedProduct.onHold || 0;
+            const onDisplay = selectedProduct.onDisplay || 0;
+            
+            let warningMessage = `⚠️ Warning: Available stock is insufficient (${available}).\n\n`;
+            warningMessage += `You are selling ${qty} item(s), but need to use:\n`;
+            
+            if (onDisplay > 0 && onHold > 0) {
+              warningMessage += `- ${deficit} from Display/Hold stock\n`;
+              warningMessage += `\nCurrent: Hold=${onHold}, Display=${onDisplay}`;
+            } else if (onDisplay > 0) {
+              warningMessage += `- ${deficit} from Display stock (currently ${onDisplay})`;
+            } else if (onHold > 0) {
+              warningMessage += `- ${deficit} from Hold stock (currently ${onHold})`;
+            }
+            
+            warningMessage += `\n\n⚠️ This is NOT recommended!\nDo you want to continue?`;
+            
+            if (!confirm(warningMessage)) {
+              return; // 用户取消
+            }
+          }
+          
+          newTotal -= qty;
+          break; }
       case 'return':
         newTotal += qty;
         break;
@@ -529,7 +580,7 @@ function App() {
                               <div>
                                 <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
                                 <p className="text-sm text-gray-500 mt-1">
-                                  Article No: {product.sku} | {product.category}
+                                  Article No: {product.sku} | {product.subCategory || 'N/A'}
                                 </p>
                               </div>
                               <div className="flex gap-1 ml-4">
@@ -597,7 +648,7 @@ function App() {
                             <button
                               onClick={() => openModal(product, 'sell')}
                               className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                              disabled={available === 0}
+                              disabled={product.totalStock === 0} // 只有总库存为0才禁用
                             >
                               <TrendingDown className="w-4 h-4" />
                               Sell
@@ -854,6 +905,13 @@ function App() {
               <p className="font-medium">
                 Total: {selectedProduct.totalStock} | Available: {getAvailable(selectedProduct)}
               </p>
+              {modalType === 'sell' && getAvailable(selectedProduct) === 0 && selectedProduct.totalStock > 0 && (
+                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-xs text-yellow-800">
+                    ⚠️ No available stock. Selling will use Display/Hold stock (not recommended)
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="mb-4">
