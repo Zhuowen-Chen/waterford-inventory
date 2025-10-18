@@ -58,7 +58,13 @@ function App() {
   const [selectedSubCollection, setSelectedSubCollection] = useState('All');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [editingProduct, setEditingProduct] = useState(null);
-  
+  const [showSellDialog, setShowSellDialog] = useState(false);
+  const [sellBreakdown, setSellBreakdown] = useState({
+    fromFree: 0,
+    fromHold: 0,
+    fromDisplay: 0
+  });
+
   const [newProduct, setNewProduct] = useState({
     name: '',
     sku: '',
@@ -96,7 +102,8 @@ function App() {
   }, []);
 
   const getAvailable = (product) => {
-    return product.totalStock - (product.onHold || 0) - (product.onDisplay || 0);
+    return product.totalStock - (product.onHold || 0);
+    // available = total - hold，available里包含display和其他
   };
 
   // Filter and search products
@@ -210,6 +217,14 @@ function App() {
       return;
     }
 
+    const onHold = editingProduct.onHold || 0;
+    const onDisplay = editingProduct.onDisplay || 0;
+    if (editingProduct.totalStock < onHold + onDisplay) {
+      alert(`Cannot reduce Total below Hold + Display quantity. 
+  Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold + onDisplay}`);
+      return;
+    }
+
     // Check for duplicates (excluding current product)
     const duplicateBySku = products.find(p => 
       p.id !== editingProduct.id && 
@@ -296,92 +311,198 @@ function App() {
       alert('Please enter a valid quantity');
       return;
     }
-
+  
     const qty = parseInt(quantity);
-    let newTotal = selectedProduct.totalStock;
+    const onHold = selectedProduct.onHold || 0;
+    const onDisplay = selectedProduct.onDisplay || 0;
+    const available = getAvailable(selectedProduct);
     
     switch(modalType) {
-      case 'receive':
-        newTotal += qty;
+      case 'receive': {
+        const newTotal = selectedProduct.totalStock + qty;
+        try {
+          const productRef = doc(db, 'products', selectedProduct.id);
+          await updateDoc(productRef, {
+            totalStock: newTotal,
+            updatedAt: serverTimestamp()
+          });
+  
+          await addDoc(collection(db, 'transactions'), {
+            productId: selectedProduct.id,
+            productName: selectedProduct.name,
+            productSku: selectedProduct.sku,
+            type: 'receive',
+            quantity: qty,
+            quantityBefore: selectedProduct.totalStock,
+            quantityAfter: newTotal,
+            notes: notes || '',
+            timestamp: serverTimestamp()
+          });
+  
+          closeModal();
+        } catch (error) {
+          console.error('Operation failed:', error);
+          alert('Operation failed');
+        }
         break;
-        case 'sell': {
-          const available = getAvailable(selectedProduct);
-          
-          // 检查总库存是否足够
-          if (selectedProduct.totalStock < qty) {
-            alert('Insufficient total stock!');
+      }
+      
+      case 'sell': {
+        // 前置检查
+        if (qty > selectedProduct.totalStock) {
+          alert(`Sell quantity cannot exceed total stock (${selectedProduct.totalStock})`);
+          return;
+        }
+      
+        const onHold = selectedProduct.onHold || 0;
+        const onDisplay = selectedProduct.onDisplay || 0;
+        const available = getAvailable(selectedProduct);
+        const freeStock = selectedProduct.totalStock - onHold - onDisplay;
+      
+        // ✅ 关键改变：只要有多个来源可选，就显示弹窗
+        const sources = [];
+        if (freeStock > 0) sources.push('free');
+        if (onHold > 0) sources.push('hold');
+        if (onDisplay > 0) sources.push('display');
+      
+        // 情况1：只有一个来源 → 直接销售
+        if (sources.length <= 1) {
+          // 直接销售，无需弹窗
+          // 需要正确计算应该从哪个来源扣
+          let holdToReduce = 0;
+          let displayToReduce = 0;
+      
+          if (freeStock >= qty) {
+            // 从free stock扣
+            holdToReduce = 0;
+            displayToReduce = 0;
+          } else if (onHold >= qty) {
+            // 只能从hold扣
+            holdToReduce = qty;
+            displayToReduce = 0;
+          } else if (onDisplay >= qty) {
+            // 只能从display扣
+            holdToReduce = 0;
+            displayToReduce = qty;
+          } else {
+            alert('Insufficient stock!');
             return;
           }
+      
+          const newTotal = selectedProduct.totalStock - qty;
+          const newHold = onHold - holdToReduce;
+          const newDisplay = onDisplay - displayToReduce;
           
-          // 如果可用库存不足，但有 Display 或 Hold，给出警告
-          if (available < qty) {
-            const deficit = qty - available;
-            const onHold = selectedProduct.onHold || 0;
-            const onDisplay = selectedProduct.onDisplay || 0;
-            
-            let warningMessage = `⚠️ Warning: Available stock is insufficient (${available}).\n\n`;
-            warningMessage += `You are selling ${qty} item(s), but need to use:\n`;
-            
-            if (onDisplay > 0 && onHold > 0) {
-              warningMessage += `- ${deficit} from Display/Hold stock\n`;
-              warningMessage += `\nCurrent: Hold=${onHold}, Display=${onDisplay}`;
-            } else if (onDisplay > 0) {
-              warningMessage += `- ${deficit} from Display stock (currently ${onDisplay})`;
-            } else if (onHold > 0) {
-              warningMessage += `- ${deficit} from Hold stock (currently ${onHold})`;
-            }
-            
-            warningMessage += `\n\n⚠️ This is NOT recommended!\nDo you want to continue?`;
-            
-            if (!confirm(warningMessage)) {
-              return; // 用户取消
-            }
+          try {
+            const productRef = doc(db, 'products', selectedProduct.id);
+            await updateDoc(productRef, {
+              totalStock: Math.max(0, newTotal),
+              onHold: Math.max(0, newHold),
+              onDisplay: Math.max(0, newDisplay),
+              updatedAt: serverTimestamp()
+            });
+      
+            await addDoc(collection(db, 'transactions'), {
+              productId: selectedProduct.id,
+              productName: selectedProduct.name,
+              productSku: selectedProduct.sku,
+              type: 'sell',
+              quantity: qty,
+              quantityBefore: selectedProduct.totalStock,
+              quantityAfter: newTotal,
+              notes: notes || '',
+              timestamp: serverTimestamp()
+            });
+      
+            closeModal();
+          } catch (error) {
+            console.error('Operation failed:', error);
+            alert('Operation failed');
           }
-          
-          newTotal -= qty;
-          break; }
-      case 'return':
-        newTotal += qty;
+        }
+        // 情况2：有多个来源 → 显示弹窗让用户选择
+        else {
+          // 初始化默认分配（优先顺序：display > hold > free）
+          let fromDisplay = Math.min(qty, onDisplay);
+          let remaining = qty - fromDisplay;
+          let fromHold = Math.min(remaining, onHold);
+          remaining -= fromHold;
+          let fromFree = remaining;
+      
+          setSellBreakdown({
+            fromFree: fromFree,
+            fromHold: fromHold,
+            fromDisplay: fromDisplay
+          });
+      
+          setShowSellDialog(true); // 打开弹窗
+        }
         break;
+      }
+      
+      case 'return': {
+        const newTotal = selectedProduct.totalStock + qty;
+        try {
+          const productRef = doc(db, 'products', selectedProduct.id);
+          await updateDoc(productRef, {
+            totalStock: newTotal,
+            updatedAt: serverTimestamp()
+          });
+  
+          await addDoc(collection(db, 'transactions'), {
+            productId: selectedProduct.id,
+            productName: selectedProduct.name,
+            productSku: selectedProduct.sku,
+            type: 'return',
+            quantity: qty,
+            quantityBefore: selectedProduct.totalStock,
+            quantityAfter: newTotal,
+            notes: notes || '',
+            timestamp: serverTimestamp()
+          });
+  
+          closeModal();
+        } catch (error) {
+          console.error('Operation failed:', error);
+          alert('Operation failed');
+        }
+        break;
+      }
+      
       default:
         return;
-    }
-
-    try {
-      const productRef = doc(db, 'products', selectedProduct.id);
-      await updateDoc(productRef, {
-        totalStock: Math.max(0, newTotal),
-        updatedAt: serverTimestamp()
-      });
-
-      await addDoc(collection(db, 'transactions'), {
-        productId: selectedProduct.id,
-        productName: selectedProduct.name,
-        productSku: selectedProduct.sku,
-        type: modalType,
-        quantity: qty,
-        quantityBefore: selectedProduct.totalStock,
-        quantityAfter: newTotal,
-        notes: notes || '',
-        timestamp: serverTimestamp()
-      });
-
-      closeModal();
-    } catch (error) {
-      console.error('Operation failed:', error);
-      alert('Operation failed');
     }
   };
 
   const handleManageHoldDisplay = async () => {
-    const newHold = parseInt(holdValue);
-    const newDisplay = parseInt(displayValue);
+    let newHold = parseInt(holdValue);
+    let newDisplay = parseInt(displayValue);
     
     if (newHold + newDisplay > selectedProduct.totalStock) {
-      alert('Hold + Display cannot exceed total stock!');
-      return;
+      const choice = prompt(
+        `Hold (${newHold}) + Display (${newDisplay}) = ${newHold + newDisplay} exceeds Total (${selectedProduct.totalStock}).\n\n` +
+        `Options:\n` +
+        `1. Keep Display only (Hold=0, Display=${newDisplay})\n` +
+        `2. Keep Hold only (Hold=${newHold}, Display=0)\n` +
+        `3. Cancel`,
+        '1'
+      );
+      
+      if (choice === '1') {
+        newHold = 0;  // ✅ 直接修改局部变量，不用setState
+        // newDisplay 保持不变
+      } else if (choice === '2') {
+        newDisplay = 0;  // ✅ 直接修改局部变量
+        // newHold 保持不变
+      } else if (choice === null || choice === '3') {
+        return; // 用户取消
+      } else {
+        alert('Invalid choice');
+        return;
+      }
     }
-
+  
+    // 现在 newHold 和 newDisplay 已经是正确的最终值
     try {
       const productRef = doc(db, 'products', selectedProduct.id);
       await updateDoc(productRef, {
@@ -389,7 +510,7 @@ function App() {
         onDisplay: newDisplay,
         updatedAt: serverTimestamp()
       });
-
+  
       await addDoc(collection(db, 'transactions'), {
         productId: selectedProduct.id,
         productName: selectedProduct.name,
@@ -399,7 +520,7 @@ function App() {
         notes: `Hold: ${selectedProduct.onHold || 0} → ${newHold}, Display: ${selectedProduct.onDisplay || 0} → ${newDisplay}`,
         timestamp: serverTimestamp()
       });
-
+  
       closeModal();
     } catch (error) {
       console.error('Operation failed:', error);
@@ -905,11 +1026,22 @@ function App() {
               <p className="font-medium">
                 Total: {selectedProduct.totalStock} | Available: {getAvailable(selectedProduct)}
               </p>
-              {modalType === 'sell' && getAvailable(selectedProduct) === 0 && selectedProduct.totalStock > 0 && (
-                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-xs text-yellow-800">
-                    ⚠️ No available stock. Selling will use Display/Hold stock (not recommended)
+              {modalType === 'sell' && (
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-xs text-blue-800 font-medium">
+                    Stock Details:
                   </p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    • Total: {selectedProduct.totalStock} | Hold: {selectedProduct.onHold || 0} | Display: {selectedProduct.onDisplay || 0}
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    • Available (free stock): {getAvailable(selectedProduct)}
+                  </p>
+                  {getAvailable(selectedProduct) === 0 && selectedProduct.totalStock > 0 && (
+                    <p className="text-xs text-yellow-800 mt-1 font-medium">
+                      ⚠️ All items are on Hold/Display. You will be prompted to choose which to sell from.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -1022,6 +1154,157 @@ function App() {
               </button>
               <button
                 onClick={closeModal}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sell分配选择弹窗 */}
+      {showSellDialog && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">Choose Sales Source</h2>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-1">Product</p>
+              <p className="font-medium">{selectedProduct.name}</p>
+            </div>
+
+            <div className="mb-6 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm font-medium text-gray-700 mb-3">Total to Sell: {quantity}</p>
+              
+              <div className="space-y-3 text-sm">
+                {/* Free Stock Input */}
+                {(selectedProduct.totalStock - (selectedProduct.onHold || 0) - (selectedProduct.onDisplay || 0)) > 0 && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      value={sellBreakdown.fromFree}
+                      onChange={(e) => {
+                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                        const maxFree = selectedProduct.totalStock - (selectedProduct.onHold || 0) - (selectedProduct.onDisplay || 0);
+                        console.log('fromFree changed:', val, 'max:', maxFree);
+                        setSellBreakdown({...sellBreakdown, fromFree: Math.min(val, maxFree)});
+                      }}
+                      className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                    />
+                    <span className="text-gray-700">from Free Stock (max: {selectedProduct.totalStock - (selectedProduct.onHold || 0) - (selectedProduct.onDisplay || 0)})</span>
+                  </div>
+                )}
+                
+                {/* Hold Input */}
+                {(selectedProduct.onHold || 0) > 0 && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max={selectedProduct.onHold || 0}
+                      value={sellBreakdown.fromHold}
+                      onChange={(e) => {
+                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                        setSellBreakdown({...sellBreakdown, fromHold: Math.min(val, selectedProduct.onHold || 0)});
+                      }}
+                      className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                    />
+                    <span className="text-gray-700">from Hold (max: {selectedProduct.onHold || 0})</span>
+                  </div>
+                )}
+                
+                {/* Display Input */}
+                {(selectedProduct.onDisplay || 0) > 0 && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max={selectedProduct.onDisplay || 0}
+                      value={sellBreakdown.fromDisplay}
+                      onChange={(e) => {
+                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                        setSellBreakdown({...sellBreakdown, fromDisplay: Math.min(val, selectedProduct.onDisplay || 0)});
+                      }}
+                      className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                    />
+                    <span className="text-gray-700">from Display (max: {selectedProduct.onDisplay || 0})</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Validation Status */}
+            <div className="mb-4 p-3 bg-blue-50 rounded border border-blue-200">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium text-blue-900">Total Selected:</span>
+                <span className="text-sm font-bold text-blue-600">
+                  {sellBreakdown.fromFree + sellBreakdown.fromHold + sellBreakdown.fromDisplay}
+                </span>
+              </div>
+              <p className="text-xs text-blue-700">
+                {sellBreakdown.fromFree + sellBreakdown.fromHold + sellBreakdown.fromDisplay === parseInt(quantity)
+                  ? '✅ Selection valid - Ready to confirm'
+                  : sellBreakdown.fromFree + sellBreakdown.fromHold + sellBreakdown.fromDisplay > parseInt(quantity)
+                  ? '❌ Total exceeds quantity needed'
+                  : `⚠️ Need ${parseInt(quantity) - (sellBreakdown.fromFree + sellBreakdown.fromHold + sellBreakdown.fromDisplay)} more`
+                }
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  const total = sellBreakdown.fromFree + sellBreakdown.fromHold + sellBreakdown.fromDisplay;
+                  if (total !== parseInt(quantity)) {
+                    alert(`Total must equal ${quantity}. Currently selected: ${total}`);
+                    return;
+                  }
+
+                  // 执行销售
+                  const newTotal = selectedProduct.totalStock - parseInt(quantity);
+                  const newHold = (selectedProduct.onHold || 0) - sellBreakdown.fromHold;
+                  const newDisplay = (selectedProduct.onDisplay || 0) - sellBreakdown.fromDisplay;
+
+                  try {
+                    const productRef = doc(db, 'products', selectedProduct.id);
+                    await updateDoc(productRef, {
+                      totalStock: Math.max(0, newTotal),
+                      onHold: Math.max(0, newHold),
+                      onDisplay: Math.max(0, newDisplay),
+                      updatedAt: serverTimestamp()
+                    });
+
+                    await addDoc(collection(db, 'transactions'), {
+                      productId: selectedProduct.id,
+                      productName: selectedProduct.name,
+                      productSku: selectedProduct.sku,
+                      type: 'sell',
+                      quantity: parseInt(quantity),
+                      quantityBefore: selectedProduct.totalStock,
+                      quantityAfter: newTotal,
+                      notes: notes || `From: Free=${sellBreakdown.fromFree}, Hold=${sellBreakdown.fromHold}, Display=${sellBreakdown.fromDisplay}`,
+                      timestamp: serverTimestamp()
+                    });
+
+                    setShowSellDialog(false);
+                    closeModal();
+                  } catch (error) {
+                    console.error('Operation failed:', error);
+                    alert('Operation failed');
+                  }
+                }}
+                disabled={sellBreakdown.fromFree + sellBreakdown.fromHold + sellBreakdown.fromDisplay !== parseInt(quantity)}
+                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => {
+                  setShowSellDialog(false);
+                  setSellBreakdown({ fromFree: 0, fromHold: 0, fromDisplay: 0 });
+                }}
                 className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
               >
                 Cancel
