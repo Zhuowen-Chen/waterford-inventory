@@ -290,11 +290,20 @@ function App() {
     setModalType(type);
     setQuantity('');
     setNotes('');
+    
     if (type === 'manage') {
       setHoldValue(product.onHold || 0);
       setDisplayValue(product.onDisplay || 0);
     } else if (type === 'edit') {
       setEditingProduct({...product});
+    } else if (type === 'sell') {
+      // ✅ 在打开Sell modal时，初始化 sellBreakdown
+      setSellBreakdown({
+        fromFree: 0,
+        fromHold: 0,
+        fromDisplay: 0
+      });
+      setShowSellDialog(false); // 确保弹窗一开始是关闭的
     }
   };
 
@@ -304,6 +313,8 @@ function App() {
     setQuantity('');
     setNotes('');
     setEditingProduct(null);
+    setShowSellDialog(false);  // ✅ 添加这一行
+    setSellBreakdown({ fromFree: 0, fromHold: 0, fromDisplay: 0 }); // ✅ 添加这一行
   };
 
   const handleStockOperation = async () => {
@@ -313,9 +324,9 @@ function App() {
     }
   
     const qty = parseInt(quantity);
-    const onHold = selectedProduct.onHold || 0;
-    const onDisplay = selectedProduct.onDisplay || 0;
-    const available = getAvailable(selectedProduct);
+    // const onHold = selectedProduct.onHold || 0;
+    // const onDisplay = selectedProduct.onDisplay || 0;
+    // const available = getAvailable(selectedProduct);
     
     switch(modalType) {
       case 'receive': {
@@ -348,7 +359,13 @@ function App() {
       }
       
       case 'sell': {
-        // 前置检查
+        if (!quantity || parseInt(quantity) <= 0) {
+          alert('Please enter a valid quantity');
+          return;
+        }
+      
+        const qty = parseInt(quantity);
+        
         if (qty > selectedProduct.totalStock) {
           alert(`Sell quantity cannot exceed total stock (${selectedProduct.totalStock})`);
           return;
@@ -356,10 +373,8 @@ function App() {
       
         const onHold = selectedProduct.onHold || 0;
         const onDisplay = selectedProduct.onDisplay || 0;
-        const available = getAvailable(selectedProduct);
         const freeStock = selectedProduct.totalStock - onHold - onDisplay;
       
-        // ✅ 关键改变：只要有多个来源可选，就显示弹窗
         const sources = [];
         if (freeStock > 0) sources.push('free');
         if (onHold > 0) sources.push('hold');
@@ -367,21 +382,16 @@ function App() {
       
         // 情况1：只有一个来源 → 直接销售
         if (sources.length <= 1) {
-          // 直接销售，无需弹窗
-          // 需要正确计算应该从哪个来源扣
           let holdToReduce = 0;
           let displayToReduce = 0;
       
           if (freeStock >= qty) {
-            // 从free stock扣
             holdToReduce = 0;
             displayToReduce = 0;
           } else if (onHold >= qty) {
-            // 只能从hold扣
             holdToReduce = qty;
             displayToReduce = 0;
           } else if (onDisplay >= qty) {
-            // 只能从display扣
             holdToReduce = 0;
             displayToReduce = qty;
           } else {
@@ -410,7 +420,9 @@ function App() {
               quantity: qty,
               quantityBefore: selectedProduct.totalStock,
               quantityAfter: newTotal,
-              notes: notes || '',
+              notes: notes || (holdToReduce > 0 || displayToReduce > 0 
+                ? `Reduced Hold by ${holdToReduce}, Display by ${displayToReduce}`
+                : ''),
               timestamp: serverTimestamp()
             });
       
@@ -419,23 +431,24 @@ function App() {
             console.error('Operation failed:', error);
             alert('Operation failed');
           }
-        }
-        // 情况2：有多个来源 → 显示弹窗让用户选择
+        } 
+        // 情况2：有多个来源 → 显示弹窗
         else {
-          // 初始化默认分配（优先顺序：display > hold > free）
-          let fromDisplay = Math.min(qty, onDisplay);
-          let remaining = qty - fromDisplay;
-          let fromHold = Math.min(remaining, onHold);
-          remaining -= fromHold;
-          let fromFree = remaining;
+          // ✅ 初始化默认分配
+          const fromDisplay = Math.min(qty, onDisplay);
+          const remaining = qty - fromDisplay;
+          const fromHold = Math.min(remaining, onHold);
+          const fromFree = qty - fromDisplay - fromHold;
       
+          // ✅ 在这里设置初始值
           setSellBreakdown({
             fromFree: fromFree,
             fromHold: fromHold,
             fromDisplay: fromDisplay
           });
       
-          setShowSellDialog(true); // 打开弹窗
+          // ✅ 然后立即打开弹窗
+          setShowSellDialog(true);
         }
         break;
       }
