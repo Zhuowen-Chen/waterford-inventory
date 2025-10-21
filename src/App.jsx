@@ -50,9 +50,11 @@ function App() {
   const [notes, setNotes] = useState('');
   const [holdValue, setHoldValue] = useState(0);
   const [displayValue, setDisplayValue] = useState(0);
+  const [faultValue, setFaultValue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showFaultList, setShowFaultList] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState('All');
   const [selectedSubCollection, setSelectedSubCollection] = useState('All');
@@ -77,14 +79,29 @@ function App() {
 
   // Load products from Firebase
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'products'), async (snapshot) => {
       const productsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+
+      // ✅ 自动为旧数据添加 onFault 字段（只添加一次）
+      for (const p of productsData) {
+        if (p.onFault === undefined) {
+          try {
+            const productRef = doc(db, 'products', p.id);
+            await updateDoc(productRef, { onFault: 0 });
+            console.log(`✅ Added onFault field to product: ${p.name}`);
+          } catch (error) {
+            console.error(`❌ Failed to update product ${p.name}:`, error);
+          }
+        }
+      }
+
       setProducts(productsData);
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -102,7 +119,10 @@ function App() {
   }, []);
 
   const getAvailable = (product) => {
-    return product.totalStock - (product.onHold || 0);
+    return Math.max(
+      0,
+      product.totalStock - (product.onHold || 0) - (product.onFault || 0)
+    );  
     // available = total - hold，available里包含display和其他
   };
 
@@ -294,6 +314,7 @@ function App() {
     if (type === 'manage') {
       setHoldValue(product.onHold || 0);
       setDisplayValue(product.onDisplay || 0);
+      setFaultValue(product.onFault || 0);
     } else if (type === 'edit') {
       setEditingProduct({...product});
     } else if (type === 'sell') {
@@ -373,7 +394,8 @@ function App() {
       
         const onHold = selectedProduct.onHold || 0;
         const onDisplay = selectedProduct.onDisplay || 0;
-        const freeStock = selectedProduct.totalStock - onHold - onDisplay;
+        const onFault = selectedProduct.onFault || 0;
+        const freeStock = selectedProduct.totalStock - onHold - onDisplay - onFault; // ← 新        
       
         const sources = [];
         if (freeStock > 0) sources.push('free');
@@ -409,6 +431,7 @@ function App() {
               totalStock: Math.max(0, newTotal),
               onHold: Math.max(0, newHold),
               onDisplay: Math.max(0, newDisplay),
+              onFault: parseInt(faultValue) || 0,
               updatedAt: serverTimestamp()
             });
       
@@ -438,7 +461,14 @@ function App() {
           const fromDisplay = Math.min(qty, onDisplay);
           const remaining = qty - fromDisplay;
           const fromHold = Math.min(remaining, onHold);
-          const fromFree = qty - fromDisplay - fromHold;
+          const freeStock = selectedProduct.totalStock - onHold - onDisplay - (selectedProduct.onFault || 0);
+          const fromFree = Math.min(remaining - fromHold, Math.max(0, freeStock));
+          
+          setSellBreakdown({
+            fromFree,
+            fromHold,
+            fromDisplay
+          });          
       
           // ✅ 在这里设置初始值
           setSellBreakdown({
@@ -490,7 +520,30 @@ function App() {
   const handleManageHoldDisplay = async () => {
     let newHold = parseInt(holdValue);
     let newDisplay = parseInt(displayValue);
-    
+    let newFault = parseInt(faultValue) || 0;
+  
+    // 🧱 新增：检查是否所有库存都是 Fault
+    if (
+      (selectedProduct.onFault || 0) >= selectedProduct.totalStock &&
+      (newHold > (selectedProduct.onHold || 0) || newDisplay > (selectedProduct.onDisplay || 0))
+    ) {
+      alert("All items are faulty — cannot allocate new Hold or Display.");
+      return;
+    }
+  
+    // 🧱 新增：防止 Fault 超过总库存
+    if (newFault > selectedProduct.totalStock) {
+      alert(`Fault quantity (${newFault}) cannot exceed Total Stock (${selectedProduct.totalStock}).`);
+      return;
+    }
+
+    // 🧱 防止 Hold + Display + Fault 超过总库存
+    if (newHold + newDisplay + newFault > selectedProduct.totalStock) {
+      alert(`Total allocation exceeds Total Stock (${selectedProduct.totalStock}). Please adjust your numbers.`);
+      return;
+    }
+
+    // ✅ 原有逻辑（保留）
     if (newHold + newDisplay > selectedProduct.totalStock) {
       const choice = prompt(
         `Hold (${newHold}) + Display (${newDisplay}) = ${newHold + newDisplay} exceeds Total (${selectedProduct.totalStock}).\n\n` +
@@ -502,10 +555,10 @@ function App() {
       );
       
       if (choice === '1') {
-        newHold = 0;  // ✅ 直接修改局部变量，不用setState
+        newHold = 0;
         // newDisplay 保持不变
       } else if (choice === '2') {
-        newDisplay = 0;  // ✅ 直接修改局部变量
+        newDisplay = 0;
         // newHold 保持不变
       } else if (choice === null || choice === '3') {
         return; // 用户取消
@@ -515,12 +568,13 @@ function App() {
       }
     }
   
-    // 现在 newHold 和 newDisplay 已经是正确的最终值
+    // ✅ 原有保存逻辑，轻微增加 onFault 的更新和 note 的记录
     try {
       const productRef = doc(db, 'products', selectedProduct.id);
       await updateDoc(productRef, {
         onHold: newHold,
         onDisplay: newDisplay,
+        onFault: newFault,  // 👈 新增字段
         updatedAt: serverTimestamp()
       });
   
@@ -530,7 +584,7 @@ function App() {
         productSku: selectedProduct.sku,
         type: 'manage',
         quantity: 0,
-        notes: `Hold: ${selectedProduct.onHold || 0} → ${newHold}, Display: ${selectedProduct.onDisplay || 0} → ${newDisplay}`,
+        notes: `Hold: ${selectedProduct.onHold || 0} → ${newHold}, Display: ${selectedProduct.onDisplay || 0} → ${newDisplay}, Fault: ${selectedProduct.onFault || 0} → ${newFault}`, // 👈 这里也更新日志
         timestamp: serverTimestamp()
       });
   
@@ -540,6 +594,7 @@ function App() {
       alert('Operation failed');
     }
   };
+  
 
   const getStockStatus = (product) => {
     const available = getAvailable(product);
@@ -593,6 +648,13 @@ function App() {
             >
               <History className="w-4 h-4" />
               History
+            </button>
+            <button
+              onClick={() => setShowFaultList(!showFaultList)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+            >
+              <AlertCircle className="w-4 h-4" />
+              Fault List
             </button>
           </div>
         </div>
@@ -752,6 +814,11 @@ function App() {
                                 <span className="font-semibold text-gray-900">{product.onDisplay || 0}</span>
                               </div>
                               <div className="flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm text-gray-600">Fault:</span>
+                                <span className="font-semibold text-gray-900">{product.onFault || 0}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
                                 <span className="text-sm text-gray-600">Available:</span>
                                 <span className={`font-bold ${getStockStatus(product)}`}>{available}</span>
                               </div>
@@ -782,7 +849,7 @@ function App() {
                             <button
                               onClick={() => openModal(product, 'sell')}
                               className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                              disabled={product.totalStock === 0} // 只有总库存为0才禁用
+                              disabled={product.totalStock === 0 || (product.totalStock - (product.onFault || 0)) === 0}
                             >
                               <TrendingDown className="w-4 h-4" />
                               Sell
@@ -1018,6 +1085,30 @@ function App() {
           </div>
         </div>
       )}
+      {/* Fault List Modal */}
+      {showFaultList && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Fault Products</h2>
+              <button onClick={() => setShowFaultList(false)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+            </div>
+            {products.filter(p => (p.onFault || 0) > 0).length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No faulty products</p>
+            ) : (
+              <div className="space-y-3">
+                {products.filter(p => (p.onFault || 0) > 0).map(p => (
+                  <div key={p.id} className="border-b pb-3">
+                    <p className="font-medium text-gray-900">{p.name}</p>
+                    <p className="text-sm text-gray-500">Article No: {p.sku}</p>
+                    <p className="text-sm text-red-600 font-semibold mt-1">Fault: {p.onFault}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Stock Operation Modal */}
       {modalType && selectedProduct && modalType !== 'manage' && modalType !== 'edit' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -1149,11 +1240,23 @@ function App() {
               />
             </div>
 
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Fault Quantity</label>
+              <input
+                type="number"
+                value={faultValue}
+                onChange={(e) => setFaultValue(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                min="0"
+                max={selectedProduct.totalStock}
+              />
+            </div>
+
             <div className="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-blue-900">New Available Stock</span>
                 <span className="font-bold text-lg text-blue-600">
-                  {selectedProduct.totalStock - holdValue - displayValue}
+                  {selectedProduct.totalStock - holdValue - displayValue - faultValue}
                 </span>
               </div>
             </div>
@@ -1200,7 +1303,10 @@ function App() {
                       value={sellBreakdown.fromFree}
                       onChange={(e) => {
                         const val = Math.max(0, parseInt(e.target.value) || 0);
-                        const maxFree = selectedProduct.totalStock - (selectedProduct.onHold || 0) - (selectedProduct.onDisplay || 0);
+                        const maxFree = selectedProduct.totalStock
+                          - (selectedProduct.onHold || 0)
+                          - (selectedProduct.onDisplay || 0)
+                          - (selectedProduct.onFault || 0); // ← 新
                         console.log('fromFree changed:', val, 'max:', maxFree);
                         setSellBreakdown({...sellBreakdown, fromFree: Math.min(val, maxFree)});
                       }}
