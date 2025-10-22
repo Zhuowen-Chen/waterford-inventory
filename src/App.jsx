@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter } from 'lucide-react';
-import { db } from './firebase';
+import { db, auth } from './firebase';  
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
 // Waterford Collections Structure - Simplified
 const MAIN_CATEGORIES = {
@@ -41,6 +42,11 @@ const COLLECTIONS = MAIN_CATEGORIES;
 const CATEGORIES = ['Stemware', 'Barware', 'Giftware', 'Home Décor', 'Lighting', 'Other'];
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
   const [products, setProducts] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -77,8 +83,34 @@ function App() {
     retailPrice: 0
   });
 
-  // Load products from Firebase
+  // 检查登录状态（放在第一个 useEffect）
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 登录函数
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+    } catch (error) {
+      alert('Login failed: ' + error.message);
+    }
+  };
+
+  // 登出函数
+  const handleLogout = () => {
+    signOut(auth);
+  };
+
+  // Load products from Firebase (only after user is logged in)
+  useEffect(() => {
+    if (!user) return;  // 🚀 等待 Firebase Auth 完成后再加载数据
+
     const unsubscribe = onSnapshot(collection(db, 'products'), async (snapshot) => {
       const productsData = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -103,7 +135,7 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]); // 👈 改成 [user]，确保在用户登录后执行
 
   // Load transactions
   useEffect(() => {
@@ -614,6 +646,57 @@ function App() {
     });
   };
 
+  // 如果还在检查登录状态
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 如果未登录，显示登录页面
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+          <h1 className="text-2xl font-bold text-center mb-6">Waterford Crystal Inventory</h1>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium"
+            >
+              Login
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -655,6 +738,12 @@ function App() {
             >
               <AlertCircle className="w-4 h-4" />
               Fault List
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
+            >
+              Logout
             </button>
           </div>
         </div>
