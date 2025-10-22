@@ -334,8 +334,8 @@ function App() {
     setQuantity('');
     setNotes('');
     setEditingProduct(null);
-    setShowSellDialog(false);  // ✅ 添加这一行
-    setSellBreakdown({ fromFree: 0, fromHold: 0, fromDisplay: 0 }); // ✅ 添加这一行
+    setShowSellDialog(false); 
+    setSellBreakdown({ fromFree: 0, fromHold: 0, fromDisplay: 0 }); 
   };
 
   const handleStockOperation = async () => {

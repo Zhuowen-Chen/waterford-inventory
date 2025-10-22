@@ -9,13 +9,13 @@ import { getFirestore } from 'firebase/firestore';  // 导入 Firestore 数据�
 
 // ✅ Firebase 项目配置（从 Firebase 控制台复制而来）
 const firebaseConfig = {
-  apiKey: "AIzaSyB4C799PBPH2yQrUBj8Sax6DxO-ZycUvaU",
-  authDomain: "waterford-crystal-inventory.firebaseapp.com",
-  projectId: "waterford-crystal-inventory",
-  storageBucket: "waterford-crystal-inventory.appspot.com",  // ✅ 修正此行
-  messagingSenderId: "930195465251",
-  appId: "1:930195465251:web:3fd8bc33d54f6d373cbd96",
-  measurementId: "G-22GEWBCHLC"
+  apiKey: "AIzaSyD10pwU8U9qo0ZYr4nDNVsKNt-1FaX7dL4",
+  authDomain: "waterford-crystal-invent-92cfa.firebaseapp.com",
+  projectId: "waterford-crystal-invent-92cfa",
+  storageBucket: "waterford-crystal-invent-92cfa.firebasestorage.app",
+  messagingSenderId: "97828431445",
+  appId: "1:97828431445:web:2ce0ee38f08d97f5b896dc",
+  measurementId: "G-K746T626Z1"
 };
 
 // 🔧 初始化 Firebase 应用
