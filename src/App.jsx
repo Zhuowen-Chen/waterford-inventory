@@ -713,39 +713,47 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Waterford Crystal Inventory</h1>
-            <p className="text-sm text-gray-500 mt-1">Brown Thomas Concession</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
-            >
-              <Filter className="w-4 h-4" />
-              Filters
-            </button>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
-            >
-              <History className="w-4 h-4" />
-              History
-            </button>
-            <button
-              onClick={() => setShowFaultList(!showFaultList)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
-            >
-              <AlertCircle className="w-4 h-4" />
-              Fault List
-            </button>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
-            >
-              Logout
-            </button>
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Title */}
+            <div className="text-center lg:text-left">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+                Waterford Crystal Inventory
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">Brown Thomas Concession</p>
+            </div>
+            
+            {/* Buttons - responsive grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm whitespace-nowrap"
+              >
+                <Filter className="w-4 h-4" />
+                <span>Filters</span>
+              </button>
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm whitespace-nowrap"
+              >
+                <History className="w-4 h-4" />
+                <span>History</span>
+              </button>
+              <button
+                onClick={() => setShowFaultList(!showFaultList)}
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm whitespace-nowrap"
+              >
+                <AlertCircle className="w-4 h-4" />
+                <span className="hidden sm:inline">Fault List</span>
+                <span className="sm:hidden">Fault</span>
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm whitespace-nowrap"
+              >
+                <span>Logout</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
