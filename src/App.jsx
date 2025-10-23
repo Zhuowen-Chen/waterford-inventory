@@ -67,6 +67,7 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [editingProduct, setEditingProduct] = useState(null);
   const [showSellDialog, setShowSellDialog] = useState(false);
+  const [showLowStockList, setShowLowStockList] = useState(false);
   const [sellBreakdown, setSellBreakdown] = useState({
     fromFree: 0,
     fromHold: 0,
@@ -818,13 +819,16 @@ function App() {
           </div>
         )}
 
-        {/* Low Stock Alert */}
+        {/* Low Stock Alert (clickable) */}
         {products.some(p => getAvailable(p) <= p.minStockLevel && getAvailable(p) > 0) && (
-          <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+          <div
+            onClick={() => setShowLowStockList(true)}
+            className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded cursor-pointer hover:bg-yellow-100 transition"
+          >
             <div className="flex items-center">
               <AlertCircle className="text-yellow-600 w-5 h-5 mr-2" />
               <p className="text-yellow-800 font-medium">
-                {products.filter(p => getAvailable(p) <= p.minStockLevel && getAvailable(p) > 0).length} product(s) running low on stock
+                {products.filter(p => getAvailable(p) <= p.minStockLevel && getAvailable(p) > 0).length} product(s) running low on stock — <span className="underline">Click to view</span>
               </p>
             </div>
           </div>
@@ -1198,6 +1202,51 @@ function App() {
           </div>
         </div>
       )}
+      {/* Low Stock Modal */}
+      {showLowStockList && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-lg w-96 max-h-[80vh] overflow-y-auto p-4">
+            <h2 className="text-lg font-bold mb-3 text-yellow-700 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-yellow-600" /> Running Low on Stock
+            </h2>
+
+            {products.filter(p => getAvailable(p) <= p.minStockLevel && getAvailable(p) > 0).length === 0 ? (
+              <p>All products are sufficiently stocked.</p>
+            ) : (
+              <ul className="space-y-2">
+                {products
+                  .filter(p => getAvailable(p) <= p.minStockLevel)
+                  .map((p) => (
+                    <li
+                      key={p.id}
+                      className="border rounded-lg p-2 flex justify-between items-center"
+                    >
+                      <div>
+                        <p className="font-medium">{p.name}</p>
+                        <p className="text-sm text-gray-500">
+                          Stock: {getAvailable(p)}
+                        </p>
+                      </div>
+                      <span className="text-red-600 font-semibold">
+                        Min: {p.minStockLevel}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            )}
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setShowLowStockList(false)}
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stock Operation Modal */}
       {modalType && selectedProduct && modalType !== 'manage' && modalType !== 'edit' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
