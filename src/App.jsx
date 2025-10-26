@@ -7,20 +7,22 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebas
 // Waterford Collections Structure - Simplified
 const MAIN_CATEGORIES = {
   'Collections': [
-    'Mastercraft', 
     'Lismore Red', 
     'Lismore', 
     'Lismore Essence', 
-    'Lismore Arcus', 
-    'Lismore Tall', 
     'Lismore Black', 
     'Lismore Diamond',
+    'Lismore Arcus',
+    'The Aran',
+    'Heritage Mastercraft',
+    'Irish Lace',
+    'Copper Coast',
+    'Celebration',
     'Connoisseur',
     'Elegance',
     'Elegance Optic',
     'Mixology',
     'Gin Journeys',
-    'Craft Brew',
     'Marquis',
     'Waterford × Elton John'
   ],
