@@ -1,10 +1,13 @@
+// ==================== PART 1: IMPORTS & CONSTANTS ====================
+// Copy this entire section first
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter } from 'lucide-react';
+import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter, BarChart3, Home, ShoppingCart, PieChart, Calendar } from 'lucide-react';
 import { db, auth } from './firebase';  
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
-// Waterford Collections Structure - Simplified
+// Waterford Collections Structure
 const MAIN_CATEGORIES = {
   'Collections': [
     'Lismore Red', 
@@ -38,19 +41,27 @@ const MAIN_CATEGORIES = {
   ]
 };
 
-// Keep for backward compatibility
 const COLLECTIONS = MAIN_CATEGORIES;
-
 const CATEGORIES = ['Stemware', 'Barware', 'Giftware', 'Home Décor', 'Lighting', 'Other'];
 
+// ==================== PART 2 FIXED: COMPONENT START & STATE ====================
+// Replace your Part 2 with this cleaned version
+
 function App() {
+  // Auth states
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
+  // View states - NEW: Add currentView
+  const [currentView, setCurrentView] = useState('dashboard');
+  
+  // Data states
   const [products, setProducts] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  
+  // UI states
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [modalType, setModalType] = useState(null);
@@ -60,16 +71,23 @@ function App() {
   const [displayValue, setDisplayValue] = useState(0);
   const [faultValue, setFaultValue] = useState(0);
   const [loading, setLoading] = useState(true);
+  
+  // Modal states
   const [showAddProduct, setShowAddProduct] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [showFaultList, setShowFaultList] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showLowStockList, setShowLowStockList] = useState(false);
+  const [showOutOfStockList, setShowOutOfStockList] = useState(false);
+  const [showSellDialog, setShowSellDialog] = useState(false);
+  
+  // Filter states
   const [selectedCollection, setSelectedCollection] = useState('All');
   const [selectedSubCollection, setSelectedSubCollection] = useState('All');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  
+  // Edit states
   const [editingProduct, setEditingProduct] = useState(null);
-  const [showSellDialog, setShowSellDialog] = useState(false);
-  const [showLowStockList, setShowLowStockList] = useState(false);
+  const [quickActionSku, setQuickActionSku] = useState('');
+  
+  // Sell breakdown state
   const [sellBreakdown, setSellBreakdown] = useState({
     fromFree: 0,
     fromHold: 0,
@@ -80,13 +98,16 @@ function App() {
     name: '',
     sku: '',
     mainCategory: 'Collections',
-    subCategory: MAIN_CATEGORIES['Collections']?.[0] || 'Mastercraft',  // 👈 动态获取第一个
+    subCategory: MAIN_CATEGORIES['Collections']?.[0] || 'Mastercraft',
     totalStock: 0,
     minStockLevel: 2,
     retailPrice: 0
   });
 
-  // 检查登录状态（放在第一个 useEffect）
+// ==================== PART 3 FIXED: useEffect HOOKS & HELPER FUNCTIONS ====================
+// Replace your Part 3 with this cleaned version
+
+  // Check login status
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -95,7 +116,7 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // 登录函数
+  // Login function
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -105,14 +126,14 @@ function App() {
     }
   };
 
-  // 登出函数
+  // Logout function
   const handleLogout = () => {
     signOut(auth);
   };
 
-  // Load products from Firebase (only after user is logged in)
+  // Load products from Firebase
   useEffect(() => {
-    if (!user) return;  // 🚀 等待 Firebase Auth 完成后再加载数据
+    if (!user) return;
 
     const unsubscribe = onSnapshot(collection(db, 'products'), async (snapshot) => {
       const productsData = snapshot.docs.map(doc => ({
@@ -120,15 +141,14 @@ function App() {
         ...doc.data()
       }));
 
-      // ✅ 自动为旧数据添加 onFault 字段（只添加一次）
+      // Auto-add onFault field for old data
       for (const p of productsData) {
         if (p.onFault === undefined) {
           try {
             const productRef = doc(db, 'products', p.id);
             await updateDoc(productRef, { onFault: 0 });
-            console.log(`✅ Added onFault field to product: ${p.name}`);
           } catch (error) {
-            console.error(`❌ Failed to update product ${p.name}:`, error);
+            console.error(`Failed to update product ${p.name}:`, error);
           }
         }
       }
@@ -138,10 +158,11 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, [user]); // 👈 改成 [user]，确保在用户登录后执行
+  }, [user]);
 
   // Load transactions
   useEffect(() => {
+    if (!user) return;
     const q = query(collection(db, 'transactions'), orderBy('timestamp', 'desc'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const transactionsData = snapshot.docs.map(doc => ({
@@ -151,17 +172,17 @@ function App() {
       setTransactions(transactionsData);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
+  // Helper function: Get available stock
   const getAvailable = (product) => {
     return Math.max(
       0,
       product.totalStock - (product.onHold || 0) - (product.onFault || 0)
-    );  
-    // available = total - hold，available里包含display和其他
+    );
   };
 
-  // Filter and search products
+  // Filter products
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -176,25 +197,24 @@ function App() {
     });
   }, [products, searchTerm, selectedCollection, selectedSubCollection]);
 
-  // Group products by category
-  const groupedProducts = useMemo(() => {
-    const grouped = {};
-    filteredProducts.forEach(product => {
-      const mainCat = product.mainCategory || 'Collections';
-      const subCat = product.subCategory || 'Other';
-      const key = `${mainCat} > ${subCat}`;
-      if (!grouped[key]) {
-        grouped[key] = [];
-      }
-      grouped[key].push(product);
-    });
-    return grouped;
-  }, [filteredProducts]);
+  // Statistics - NEW for Dashboard
+  const stats = useMemo(() => {
+    const totalProducts = products.length;
+    const lowStock = products.filter(p => getAvailable(p) > 0 && getAvailable(p) <= p.minStockLevel).length;
+    const outOfStock = products.filter(p => getAvailable(p) === 0).length;
+    const totalValue = products.reduce((sum, p) => sum + (p.totalStock * p.retailPrice), 0);
+    
+    return { totalProducts, lowStock, outOfStock, totalValue };
+  }, [products]);
 
-  // Check if product already exists
-  const checkDuplicateProduct = (name, sku) => {
-    const duplicateBySku = products.find(p => p.sku.toLowerCase() === sku.toLowerCase());
-    const duplicateByName = products.find(p => p.name.toLowerCase() === name.toLowerCase());
+  // Check duplicate product
+  const checkDuplicateProduct = (name, sku, excludeId = null) => {
+    const duplicateBySku = products.find(p => 
+      p.id !== excludeId && p.sku.toLowerCase() === sku.toLowerCase()
+    );
+    const duplicateByName = products.find(p => 
+      p.id !== excludeId && p.name.toLowerCase() === name.toLowerCase()
+    );
     
     if (duplicateBySku) {
       return `A product with Article Number "${sku}" already exists: ${duplicateBySku.name}`;
@@ -207,30 +227,35 @@ function App() {
     return null;
   };
 
+  // Format timestamp for display
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate();
+    return date.toLocaleString('en-IE', { 
+      month: 'short', 
+      day: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  };
 
+  // ==================== PART 4: PRODUCT OPERATION FUNCTIONS ====================
+// Copy this section after Part 3
+
+  // Add Product
   const handleAddProduct = async () => {
     if (!newProduct.name || !newProduct.sku) {
       alert('Please fill in Product Name and Article Number');
       return;
     }
-  
-    // Check for duplicates
+
     const duplicateError = checkDuplicateProduct(newProduct.name, newProduct.sku);
     if (duplicateError) {
       alert(duplicateError);
       return;
     }
-  
-    try {
-      // 添加调试
-      console.log('Adding product with data:', {
-        name: newProduct.name,
-        sku: newProduct.sku,
-        mainCategory: newProduct.mainCategory,
-        subCategory: newProduct.subCategory,
-        totalStock: newProduct.totalStock,
-      });
 
+    try {
       await addDoc(collection(db, 'products'), {
         name: newProduct.name,
         sku: newProduct.sku,
@@ -241,12 +266,10 @@ function App() {
         retailPrice: newProduct.retailPrice,
         onHold: 0,
         onDisplay: 0,
+        onFault: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-
-      // 添加调试
-      console.log('Product added successfully to Firebase');
       
       setShowAddProduct(false);
       setNewProduct({
@@ -266,6 +289,7 @@ function App() {
     }
   };
 
+  // Edit Product
   const handleEditProduct = async () => {
     if (!editingProduct.name || !editingProduct.sku) {
       alert('Please fill in Product Name and Article Number');
@@ -276,35 +300,20 @@ function App() {
     const onDisplay = editingProduct.onDisplay || 0;
     if (editingProduct.totalStock < onHold + onDisplay) {
       alert(`Cannot reduce Total below Hold + Display quantity. 
-  Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold + onDisplay}`);
+Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold + onDisplay}`);
       return;
     }
 
-    // Check for duplicates (excluding current product)
-    const duplicateBySku = products.find(p => 
-      p.id !== editingProduct.id && 
-      p.sku.toLowerCase() === editingProduct.sku.toLowerCase()
-    );
-    
-    const duplicateByName = products.find(p => 
-      p.id !== editingProduct.id && 
-      p.name.toLowerCase() === editingProduct.name.toLowerCase()
-    );
-    
-    if (duplicateBySku) {
-      alert(`A product with Article Number "${editingProduct.sku}" already exists: ${duplicateBySku.name}`);
-      return;
-    }
-    
-    if (duplicateByName) {
-      alert(`A product with name "${editingProduct.name}" already exists (Article No: ${duplicateByName.sku})`);
+    const duplicateError = checkDuplicateProduct(editingProduct.name, editingProduct.sku, editingProduct.id);
+    if (duplicateError) {
+      alert(duplicateError);
       return;
     }
 
     try {
       const productRef = doc(db, 'products', editingProduct.id);
       
-      const updateData = {
+      await updateDoc(productRef, {
         name: editingProduct.name,
         sku: editingProduct.sku,
         mainCategory: editingProduct.mainCategory || 'Collections',
@@ -313,9 +322,7 @@ function App() {
         minStockLevel: editingProduct.minStockLevel || 2,
         retailPrice: editingProduct.retailPrice || 0,
         updatedAt: serverTimestamp()
-      };
-
-      await updateDoc(productRef, updateData);
+      });
 
       setModalType(null);
       setEditingProduct(null);
@@ -326,6 +333,7 @@ function App() {
     }
   };
 
+  // Delete Product
   const handleDeleteProduct = async (product) => {
     if (!confirm(`Are you sure you want to delete "${product.name}"?\n\nThis action cannot be undone.`)) {
       return;
@@ -340,11 +348,13 @@ function App() {
     }
   };
 
+  // Open Modal
   const openModal = (product, type) => {
     setSelectedProduct(product);
     setModalType(type);
     setQuantity('');
     setNotes('');
+    setQuickActionSku('');
     
     if (type === 'manage') {
       setHoldValue(product.onHold || 0);
@@ -353,36 +363,116 @@ function App() {
     } else if (type === 'edit') {
       setEditingProduct({...product});
     } else if (type === 'sell') {
-      // ✅ 在打开Sell modal时，初始化 sellBreakdown
       setSellBreakdown({
         fromFree: 0,
         fromHold: 0,
         fromDisplay: 0
       });
-      setShowSellDialog(false); // 确保弹窗一开始是关闭的
+      setShowSellDialog(false);
     }
   };
 
+  // Close Modal
   const closeModal = () => {
     setSelectedProduct(null);
     setModalType(null);
     setQuantity('');
     setNotes('');
     setEditingProduct(null);
-    setShowSellDialog(false); 
-    setSellBreakdown({ fromFree: 0, fromHold: 0, fromDisplay: 0 }); 
+    setQuickActionSku('');
+    setShowSellDialog(false);
+    setSellBreakdown({ fromFree: 0, fromHold: 0, fromDisplay: 0 });
   };
 
+  // ==================== PART 5: STOCK OPERATION FUNCTIONS ====================
+// Copy this section after Part 4
+
+  // Handle Stock Operations (Receive/Sell/Return)
   const handleStockOperation = async () => {
+    // Quick actions from dashboard
+    if (modalType === 'quick-receive' || modalType === 'quick-sell') {
+      if (!quickActionSku || !quantity || parseInt(quantity) <= 0) {
+        alert('Please fill in Article Number and Quantity');
+        return;
+      }
+
+      const product = products.find(p => p.sku.toLowerCase() === quickActionSku.toLowerCase());
+      if (!product) {
+        alert(`Product with Article Number "${quickActionSku}" not found`);
+        return;
+      }
+
+      const qty = parseInt(quantity);
+
+      if (modalType === 'quick-receive') {
+        const newTotal = product.totalStock + qty;
+        try {
+          const productRef = doc(db, 'products', product.id);
+          await updateDoc(productRef, {
+            totalStock: newTotal,
+            updatedAt: serverTimestamp()
+          });
+
+          await addDoc(collection(db, 'transactions'), {
+            productId: product.id,
+            productName: product.name,
+            productSku: product.sku,
+            type: 'receive',
+            quantity: qty,
+            quantityBefore: product.totalStock,
+            quantityAfter: newTotal,
+            notes: notes || '',
+            timestamp: serverTimestamp()
+          });
+
+          alert(`Received ${qty} units of ${product.name}`);
+          closeModal();
+        } catch (error) {
+          console.error('Operation failed:', error);
+          alert('Operation failed');
+        }
+      } else if (modalType === 'quick-sell') {
+        if (qty > getAvailable(product)) {
+          alert('Insufficient available stock!');
+          return;
+        }
+        const newTotal = product.totalStock - qty;
+        try {
+          const productRef = doc(db, 'products', product.id);
+          await updateDoc(productRef, {
+            totalStock: newTotal,
+            updatedAt: serverTimestamp()
+          });
+
+          await addDoc(collection(db, 'transactions'), {
+            productId: product.id,
+            productName: product.name,
+            productSku: product.sku,
+            type: 'sell',
+            quantity: qty,
+            quantityBefore: product.totalStock,
+            quantityAfter: newTotal,
+            notes: notes || '',
+            timestamp: serverTimestamp()
+          });
+
+          alert(`Sold ${qty} units of ${product.name}`);
+          closeModal();
+        } catch (error) {
+          console.error('Operation failed:', error);
+          alert('Operation failed');
+        }
+      }
+      return;
+    }
+
+    // Regular operations
     if (!quantity || parseInt(quantity) <= 0) {
       alert('Please enter a valid quantity');
       return;
     }
-  
+
     const qty = parseInt(quantity);
-    // const onHold = selectedProduct.onHold || 0;
-    // const onDisplay = selectedProduct.onDisplay || 0;
-    // const available = getAvailable(selectedProduct);
     
     switch(modalType) {
       case 'receive': {
@@ -393,7 +483,7 @@ function App() {
             totalStock: newTotal,
             updatedAt: serverTimestamp()
           });
-  
+
           await addDoc(collection(db, 'transactions'), {
             productId: selectedProduct.id,
             productName: selectedProduct.name,
@@ -405,7 +495,7 @@ function App() {
             notes: notes || '',
             timestamp: serverTimestamp()
           });
-  
+
           closeModal();
         } catch (error) {
           console.error('Operation failed:', error);
@@ -415,33 +505,26 @@ function App() {
       }
       
       case 'sell': {
-        if (!quantity || parseInt(quantity) <= 0) {
-          alert('Please enter a valid quantity');
-          return;
-        }
-      
-        const qty = parseInt(quantity);
-        
         if (qty > selectedProduct.totalStock) {
           alert(`Sell quantity cannot exceed total stock (${selectedProduct.totalStock})`);
           return;
         }
-      
+
         const onHold = selectedProduct.onHold || 0;
         const onDisplay = selectedProduct.onDisplay || 0;
         const onFault = selectedProduct.onFault || 0;
-        const freeStock = selectedProduct.totalStock - onHold - onDisplay - onFault; // ← 新        
-      
+        const freeStock = selectedProduct.totalStock - onHold - onDisplay - onFault;
+
         const sources = [];
         if (freeStock > 0) sources.push('free');
         if (onHold > 0) sources.push('hold');
         if (onDisplay > 0) sources.push('display');
-      
-        // 情况1：只有一个来源 → 直接销售
+
+        // Single source - direct sale
         if (sources.length <= 1) {
           let holdToReduce = 0;
           let displayToReduce = 0;
-      
+
           if (freeStock >= qty) {
             holdToReduce = 0;
             displayToReduce = 0;
@@ -455,7 +538,7 @@ function App() {
             alert('Insufficient stock!');
             return;
           }
-      
+
           const newTotal = selectedProduct.totalStock - qty;
           const newHold = onHold - holdToReduce;
           const newDisplay = onDisplay - displayToReduce;
@@ -466,10 +549,9 @@ function App() {
               totalStock: Math.max(0, newTotal),
               onHold: Math.max(0, newHold),
               onDisplay: Math.max(0, newDisplay),
-              onFault: parseInt(faultValue) || 0,
               updatedAt: serverTimestamp()
             });
-      
+
             await addDoc(collection(db, 'transactions'), {
               productId: selectedProduct.id,
               productName: selectedProduct.name,
@@ -483,36 +565,26 @@ function App() {
                 : ''),
               timestamp: serverTimestamp()
             });
-      
+
             closeModal();
           } catch (error) {
             console.error('Operation failed:', error);
             alert('Operation failed');
           }
         } 
-        // 情况2：有多个来源 → 显示弹窗
+        // Multiple sources - show dialog
         else {
-          // ✅ 初始化默认分配
           const fromDisplay = Math.min(qty, onDisplay);
           const remaining = qty - fromDisplay;
           const fromHold = Math.min(remaining, onHold);
-          const freeStock = selectedProduct.totalStock - onHold - onDisplay - (selectedProduct.onFault || 0);
           const fromFree = Math.min(remaining - fromHold, Math.max(0, freeStock));
           
           setSellBreakdown({
             fromFree,
             fromHold,
             fromDisplay
-          });          
-      
-          // ✅ 在这里设置初始值
-          setSellBreakdown({
-            fromFree: fromFree,
-            fromHold: fromHold,
-            fromDisplay: fromDisplay
           });
-      
-          // ✅ 然后立即打开弹窗
+          
           setShowSellDialog(true);
         }
         break;
@@ -526,7 +598,7 @@ function App() {
             totalStock: newTotal,
             updatedAt: serverTimestamp()
           });
-  
+
           await addDoc(collection(db, 'transactions'), {
             productId: selectedProduct.id,
             productName: selectedProduct.name,
@@ -538,7 +610,7 @@ function App() {
             notes: notes || '',
             timestamp: serverTimestamp()
           });
-  
+
           closeModal();
         } catch (error) {
           console.error('Operation failed:', error);
@@ -552,33 +624,30 @@ function App() {
     }
   };
 
+  // Manage Hold/Display/Fault
   const handleManageHoldDisplay = async () => {
     let newHold = parseInt(holdValue);
     let newDisplay = parseInt(displayValue);
     let newFault = parseInt(faultValue) || 0;
-  
-    // 🧱 新增：检查是否所有库存都是 Fault
+
     if (
       (selectedProduct.onFault || 0) >= selectedProduct.totalStock &&
       (newHold > (selectedProduct.onHold || 0) || newDisplay > (selectedProduct.onDisplay || 0))
     ) {
-      alert("All items are faulty — cannot allocate new Hold or Display.");
+      alert("All items are faulty – cannot allocate new Hold or Display.");
       return;
     }
-  
-    // 🧱 新增：防止 Fault 超过总库存
+
     if (newFault > selectedProduct.totalStock) {
       alert(`Fault quantity (${newFault}) cannot exceed Total Stock (${selectedProduct.totalStock}).`);
       return;
     }
 
-    // 🧱 防止 Hold + Display + Fault 超过总库存
     if (newHold + newDisplay + newFault > selectedProduct.totalStock) {
       alert(`Total allocation exceeds Total Stock (${selectedProduct.totalStock}). Please adjust your numbers.`);
       return;
     }
 
-    // ✅ 原有逻辑（保留）
     if (newHold + newDisplay > selectedProduct.totalStock) {
       const choice = prompt(
         `Hold (${newHold}) + Display (${newDisplay}) = ${newHold + newDisplay} exceeds Total (${selectedProduct.totalStock}).\n\n` +
@@ -591,65 +660,507 @@ function App() {
       
       if (choice === '1') {
         newHold = 0;
-        // newDisplay 保持不变
       } else if (choice === '2') {
         newDisplay = 0;
-        // newHold 保持不变
       } else if (choice === null || choice === '3') {
-        return; // 用户取消
+        return;
       } else {
         alert('Invalid choice');
         return;
       }
     }
-  
-    // ✅ 原有保存逻辑，轻微增加 onFault 的更新和 note 的记录
+
     try {
       const productRef = doc(db, 'products', selectedProduct.id);
       await updateDoc(productRef, {
         onHold: newHold,
         onDisplay: newDisplay,
-        onFault: newFault,  // 👈 新增字段
+        onFault: newFault,
         updatedAt: serverTimestamp()
       });
-  
+
       await addDoc(collection(db, 'transactions'), {
         productId: selectedProduct.id,
         productName: selectedProduct.name,
         productSku: selectedProduct.sku,
         type: 'manage',
         quantity: 0,
-        notes: `Hold: ${selectedProduct.onHold || 0} → ${newHold}, Display: ${selectedProduct.onDisplay || 0} → ${newDisplay}, Fault: ${selectedProduct.onFault || 0} → ${newFault}`, // 👈 这里也更新日志
+        notes: `Hold: ${selectedProduct.onHold || 0} → ${newHold}, Display: ${selectedProduct.onDisplay || 0} → ${newDisplay}, Fault: ${selectedProduct.onFault || 0} → ${newFault}`,
         timestamp: serverTimestamp()
       });
-  
+
       closeModal();
     } catch (error) {
       console.error('Operation failed:', error);
       alert('Operation failed');
     }
   };
-  
 
-  const getStockStatus = (product) => {
-    const available = getAvailable(product);
-    if (available === 0) return 'text-red-600';
-    if (available <= product.minStockLevel) return 'text-yellow-600';
-    return 'text-green-600';
+  // ==================== PART 6: VIEW COMPONENTS ====================
+// Copy this section after Part 5
+
+  // ========== DASHBOARD VIEW ==========
+  const DashboardView = () => (
+    <div className="space-y-6">
+      {/* Stats Cards - Single Row - 4 columns on all screens */}
+      <div className="grid grid-cols-4 gap-4">
+        {/* Total Products */}
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm border border-blue-200 p-4">
+          <div className="flex flex-col items-center text-center">
+            <div className="w-12 h-12 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
+              <Package className="w-6 h-6 text-blue-700" />
+            </div>
+            <p className="text-xs text-blue-700 font-medium mb-1">Total Products</p>
+            <p className="text-3xl font-bold text-blue-900">{stats.totalProducts}</p>
+          </div>
+        </div>
+
+        {/* Total Inventory Value */}
+        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-sm border border-green-200 p-4">
+          <div className="flex flex-col items-center text-center">
+            <div className="w-12 h-12 bg-green-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
+              <TrendingUp className="w-6 h-6 text-green-700" />
+            </div>
+            <p className="text-xs text-green-700 font-medium mb-1">Total Value</p>
+            <p className="text-3xl font-bold text-green-900">€{stats.totalValue.toLocaleString()}</p>
+          </div>
+        </div>
+
+        {/* Low Stock Items - Clickable */}
+        <div 
+          onClick={() => setShowLowStockList(true)}
+          className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl shadow-sm border border-yellow-200 p-4 cursor-pointer hover:shadow-md transition"
+        >
+          <div className="flex flex-col items-center text-center">
+            <div className="w-12 h-12 bg-yellow-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
+              <AlertCircle className="w-6 h-6 text-yellow-700" />
+            </div>
+            <p className="text-xs text-yellow-700 font-medium mb-1">Low Stock</p>
+            <p className="text-3xl font-bold text-yellow-900">{stats.lowStock}</p>
+            <p className="text-xs text-yellow-600 mt-1 underline">Click to view</p>
+          </div>
+        </div>
+
+        {/* Out of Stock - Clickable */}
+        <div 
+          onClick={() => setShowOutOfStockList(true)}
+          className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-sm border border-red-200 p-4 cursor-pointer hover:shadow-md transition"
+        >
+          <div className="flex flex-col items-center text-center">
+            <div className="w-12 h-12 bg-red-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
+              <TrendingDown className="w-6 h-6 text-red-700" />
+            </div>
+            <p className="text-xs text-red-700 font-medium mb-1">Out of Stock</p>
+            <p className="text-3xl font-bold text-red-900">{stats.outOfStock}</p>
+            <p className="text-xs text-red-600 mt-1 underline">Click to view</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Activity & Alerts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Low Stock Alert */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <AlertCircle className="w-5 h-5 text-yellow-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Attention Required</h3>
+          </div>
+          <div className="space-y-3">
+            {products.filter(p => getAvailable(p) <= p.minStockLevel).slice(0, 5).map(p => (
+              <div key={p.id} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div>
+                  <p className="font-medium text-gray-900 text-sm">{p.name}</p>
+                  <p className="text-xs text-gray-500">{p.sku}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-bold ${getAvailable(p) === 0 ? 'text-red-600' : 'text-yellow-600'}`}>
+                    {getAvailable(p)} left
+                  </p>
+                  <p className="text-xs text-gray-500">Min: {p.minStockLevel}</p>
+                </div>
+              </div>
+            ))}
+            {products.filter(p => getAvailable(p) <= p.minStockLevel).length === 0 && (
+              <p className="text-center text-gray-500 py-4">All products are sufficiently stocked</p>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Transactions */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <History className="w-5 h-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+          </div>
+          <div className="space-y-3">
+            {transactions.slice(0, 5).map(t => (
+              <div key={t.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className={`p-2 rounded-full ${
+                  t.type === 'sell' ? 'bg-blue-100' : 
+                  t.type === 'receive' ? 'bg-green-100' : 
+                  'bg-purple-100'
+                }`}>
+                  {t.type === 'sell' ? 
+                    <TrendingDown className="w-4 h-4 text-blue-600" /> :
+                    t.type === 'receive' ?
+                    <TrendingUp className="w-4 h-4 text-green-600" /> :
+                    <Package className="w-4 h-4 text-purple-600" />
+                  }
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900 text-sm">{t.productName}</p>
+                  <p className="text-xs text-gray-500">
+                    {t.type === 'sell' ? 'Sold' : t.type === 'receive' ? 'Received' : 'Returned'} {t.quantity} units
+                  </p>
+                </div>
+                <span className="text-xs text-gray-400">{formatTime(t.timestamp)}</span>
+              </div>
+            ))}
+            {transactions.length === 0 && (
+              <p className="text-center text-gray-500 py-4">No recent transactions</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <button 
+            onClick={() => setShowAddProduct(true)}
+            className="p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition text-center group"
+          >
+            <Plus className="w-6 h-6 text-blue-600 mx-auto mb-2 group-hover:scale-110 transition" />
+            <span className="text-sm font-medium text-blue-900">Add Product</span>
+          </button>
+          <button 
+            onClick={() => {
+              setModalType('quick-receive');
+              setQuantity('');
+              setQuickActionSku('');
+            }}
+            className="p-4 bg-green-50 hover:bg-green-100 rounded-lg transition text-center group"
+          >
+            <TrendingUp className="w-6 h-6 text-green-600 mx-auto mb-2 group-hover:scale-110 transition" />
+            <span className="text-sm font-medium text-green-900">Receive Stock</span>
+          </button>
+          <button 
+            onClick={() => {
+              setModalType('quick-sell');
+              setQuantity('');
+              setQuickActionSku('');
+            }}
+            className="p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition text-center group"
+          >
+            <ShoppingCart className="w-6 h-6 text-purple-600 mx-auto mb-2 group-hover:scale-110 transition" />
+            <span className="text-sm font-medium text-purple-900">Process Sale</span>
+          </button>
+          <button 
+            onClick={() => setCurrentView('analytics')}
+            className="p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition text-center group"
+          >
+            <BarChart3 className="w-6 h-6 text-orange-600 mx-auto mb-2 group-hover:scale-110 transition" />
+            <span className="text-sm font-medium text-orange-900">View Analytics</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ========== ANALYTICS VIEW ==========
+  const AnalyticsView = () => {
+    // 计算真实的销售数据
+    const salesData = useMemo(() => {
+      const productSales = {};
+      
+      // 统计每个产品的销售数量和金额
+      transactions
+        .filter(t => t.type === 'sell')
+        .forEach(t => {
+          if (!productSales[t.productId]) {
+            const product = products.find(p => p.id === t.productId);
+            productSales[t.productId] = {
+              productId: t.productId,
+              productName: t.productName,
+              productSku: t.productSku,
+              totalQuantity: 0,
+              totalRevenue: 0,
+              retailPrice: product?.retailPrice || 0
+            };
+          }
+          productSales[t.productId].totalQuantity += t.quantity || 0;
+          productSales[t.productId].totalRevenue += (t.quantity || 0) * (productSales[t.productId].retailPrice || 0);
+        });
+      
+      // 转换为数组并按销售额排序
+      return Object.values(productSales)
+        .sort((a, b) => b.totalRevenue - a.totalRevenue);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [transactions.length, products.length]);
+
+    const hasSalesData = salesData.length > 0;
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-gray-900">Sales Analytics</h2>
+            <select className="px-4 py-2 border border-gray-300 rounded-lg">
+              <option>Last 7 days</option>
+              <option>Last 30 days</option>
+              <option>Last 3 months</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-600 font-medium">Total Sales</p>
+              <p className="text-2xl font-bold text-blue-900 mt-2">
+                €{transactions
+                  .filter(t => t.type === 'sell')
+                  .reduce((sum, t) => {
+                    const product = products.find(p => p.id === t.productId);
+                    return sum + ((t.quantity || 0) * (product?.retailPrice || 0));
+                  }, 0)
+                  .toLocaleString()}
+              </p>
+              <p className="text-xs text-blue-600 mt-1">Based on transaction records</p>
+            </div>
+            <div className="p-4 bg-green-50 rounded-lg">
+              <p className="text-sm text-green-600 font-medium">Units Sold</p>
+              <p className="text-2xl font-bold text-green-900 mt-2">
+                {transactions.filter(t => t.type === 'sell').reduce((sum, t) => sum + (t.quantity || 0), 0)}
+              </p>
+              <p className="text-xs text-green-600 mt-1">Total units</p>
+            </div>
+            <div className="p-4 bg-purple-50 rounded-lg">
+              <p className="text-sm text-purple-600 font-medium">Transactions</p>
+              <p className="text-2xl font-bold text-purple-900 mt-2">{transactions.length}</p>
+              <p className="text-xs text-purple-600 mt-1">All activities</p>
+            </div>
+          </div>
+
+          <div className="h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+            <div className="text-center">
+              <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-500">Sales chart visualization</p>
+              <p className="text-sm text-gray-400">Connect to Recharts for detailed analytics</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 只在有销售数据时显示 Top Selling Products */}
+        {hasSalesData && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Top Selling Products</h3>
+              <button
+                onClick={() => {
+                  if (confirm('Clear all analytics history? This cannot be undone.')) {
+                    alert('Analytics cleared (demo only)');
+                  }
+                }}
+                className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm font-medium"
+              >
+                Clear History
+              </button>
+            </div>
+            <div className="space-y-3">
+              {salesData.slice(0, 10).map((item, i) => (
+                <div key={item.productId} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-bold text-blue-600">#{i + 1}</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{item.productName}</p>
+                    <p className="text-sm text-gray-500">{item.productSku}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-gray-900">€{item.totalRevenue.toLocaleString()}</p>
+                    <p className="text-sm text-gray-500">{item.totalQuantity} sold</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 如果没有销售数据，显示提示 */}
+        {!hasSalesData && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+            <div className="text-center">
+              <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Sales Data Yet</h3>
+              <p className="text-gray-500">
+                Start selling products to see your top selling items here.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
-  const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-    const date = timestamp.toDate();
-    return date.toLocaleString('en-IE', { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-  };
+  // ========== INVENTORY VIEW ==========
+  const InventoryView = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex gap-3">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition flex items-center gap-2"
+          >
+            <Filter className="w-5 h-5" />
+            Filter
+          </button>
+        </div>
 
-  // 如果还在检查登录状态
+        {showFilters && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
+            <select
+              value={selectedCollection}
+              onChange={(e) => {
+                setSelectedCollection(e.target.value);
+                setSelectedSubCollection('All');
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="All">All Collections</option>
+              {Object.keys(MAIN_CATEGORIES).map(col => (
+                <option key={col} value={col}>{col}</option>
+              ))}
+            </select>
+            <select
+              value={selectedSubCollection}
+              onChange={(e) => setSelectedSubCollection(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg"
+              disabled={selectedCollection === 'All'}
+            >
+              <option value="All">All Sub-Collections</option>
+              {selectedCollection !== 'All' && MAIN_CATEGORIES[selectedCollection]?.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {filteredProducts.map(product => {
+          const available = getAvailable(product);
+          return (
+            <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900">{product.name}</h3>
+                  <p className="text-sm text-gray-500 mt-1">{product.sku} • {product.subCategory}</p>
+                </div>
+                <div className="flex gap-1">
+                  <button 
+                    onClick={() => openModal(product, 'edit')}
+                    className="p-2 text-gray-400 hover:text-blue-600 rounded"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteProduct(product)}
+                    className="p-2 text-gray-400 hover:text-red-600 rounded"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-5 gap-2 mb-4">
+                <div className="text-center p-2 bg-gray-50 rounded">
+                  <p className="text-xs text-gray-500">Total</p>
+                  <p className="font-bold text-gray-900">{product.totalStock}</p>
+                </div>
+                <div className="text-center p-2 bg-blue-50 rounded">
+                  <p className="text-xs text-blue-600">Hold</p>
+                  <p className="font-bold text-blue-900">{product.onHold}</p>
+                </div>
+                <div className="text-center p-2 bg-purple-50 rounded">
+                  <p className="text-xs text-purple-600">Display</p>
+                  <p className="font-bold text-purple-900">{product.onDisplay}</p>
+                </div>
+                <div className="text-center p-2 bg-red-50 rounded">
+                  <p className="text-xs text-red-600">Fault</p>
+                  <p className="font-bold text-red-900">{product.onFault || 0}</p>
+                </div>
+                <div className="text-center p-2 bg-green-50 rounded">
+                  <p className="text-xs text-green-600">Available</p>
+                  <p className={`font-bold ${available === 0 ? 'text-red-600' : available <= product.minStockLevel ? 'text-yellow-600' : 'text-green-600'}`}>
+                    {available}
+                  </p>
+                </div>
+              </div>
+
+              {available <= product.minStockLevel && (
+                <div className={`mb-3 p-2 rounded text-sm flex items-center gap-2 ${
+                  available === 0 ? 'bg-red-50 text-red-700' : 'bg-yellow-50 text-yellow-700'
+                }`}>
+                  <AlertCircle className="w-4 h-4" />
+                  {available === 0 ? 'Out of stock!' : 'Low stock - reorder recommended'}
+                </div>
+              )}
+
+              <div className="flex gap-2 flex-wrap">
+                <button 
+                  onClick={() => openModal(product, 'receive')}
+                  className="flex-1 min-w-[70px] px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm"
+                >
+                  Receive
+                </button>
+                <button 
+                  onClick={() => openModal(product, 'sell')}
+                  className="flex-1 min-w-[70px] px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm disabled:opacity-50"
+                  disabled={available === 0}
+                >
+                  Sell
+                </button>
+                <button 
+                  onClick={() => openModal(product, 'return')}
+                  className="flex-1 min-w-[70px] px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm"
+                >
+                  Return
+                </button>
+                <button 
+                  onClick={() => openModal(product, 'manage')}
+                  className="flex-1 min-w-[70px] px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm"
+                >
+                  Manage
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {filteredProducts.length === 0 && (
+        <div className="text-center py-12">
+          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500">No products found</p>
+        </div>
+      )}
+    </div>
+  );
+
+  // ==================== PART 7: MAIN RENDER & LOGIN SCREEN ====================
+// Copy this section after Part 6
+
+  // Loading state
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -661,7 +1172,7 @@ function App() {
     );
   }
 
-  // 如果未登录，显示登录页面
+  // Login screen
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -711,291 +1222,91 @@ function App() {
     );
   }
 
+  // Main App Layout
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b sticky top-0 z-10">
+      <header className="bg-white shadow-sm border-b sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            {/* Title */}
-            <div className="text-center lg:text-left">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                Waterford Crystal Inventory
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">Brown Thomas Concession</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Waterford Crystal</h1>
+              <p className="text-sm text-gray-500">Brown Thomas Concession</p>
             </div>
-            
-            {/* Buttons - responsive grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm whitespace-nowrap"
-              >
-                <Filter className="w-4 h-4" />
-                <span>Filters</span>
-              </button>
-              <button
-                onClick={() => setShowHistory(!showHistory)}
-                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm whitespace-nowrap"
-              >
-                <History className="w-4 h-4" />
-                <span>History</span>
-              </button>
-              <button
-                onClick={() => setShowFaultList(!showFaultList)}
-                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm whitespace-nowrap"
-              >
-                <AlertCircle className="w-4 h-4" />
-                <span className="hidden sm:inline">Fault List</span>
-                <span className="sm:hidden">Fault</span>
-              </button>
-              <button
-                onClick={handleLogout}
-                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm whitespace-nowrap"
-              >
-                <span>Logout</span>
-              </button>
-            </div>
+            <button 
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* Search Bar */}
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search by product name or article number..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        {/* Filters */}
-        {showFilters && (
-          <div className="mb-6 p-4 bg-white rounded-lg border border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Collection</label>
-                <select
-                  value={selectedCollection}
-                  onChange={(e) => {
-                    setSelectedCollection(e.target.value);
-                    setSelectedSubCollection('All');
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Collections</option>
-                  {Object.keys(COLLECTIONS).map(col => (
-                    <option key={col} value={col}>{col}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Sub-Collection</label>
-                <select
-                  value={selectedSubCollection}
-                  onChange={(e) => setSelectedSubCollection(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  disabled={selectedCollection === 'All'}
-                >
-                  <option value="All">All Sub-Collections</option>
-                  {selectedCollection !== 'All' && COLLECTIONS[selectedCollection]?.map(sub => (
-                    <option key={sub} value={sub}>{sub}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Categories</option>
-                  {CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Low Stock Alert (clickable) */}
-        {products.some(p => getAvailable(p) <= p.minStockLevel && getAvailable(p) > 0) && (
-          <div
-            onClick={() => setShowLowStockList(true)}
-            className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded cursor-pointer hover:bg-yellow-100 transition"
-          >
-            <div className="flex items-center">
-              <AlertCircle className="text-yellow-600 w-5 h-5 mr-2" />
-              <p className="text-yellow-800 font-medium">
-                {products.filter(p => getAvailable(p) <= p.minStockLevel && getAvailable(p) > 0).length} product(s) running low on stock — <span className="underline">Click to view</span>
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Products List - Grouped */}
-        {products.length === 0 ? (
-          <div className="text-center py-12">
-            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 mb-4">No products added yet</p>
+      {/* Navigation Tabs */}
+      <nav className="bg-white border-b sticky top-[73px] z-10">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex gap-1">
             <button
-              onClick={() => setShowAddProduct(true)}
-              className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+              onClick={() => setCurrentView('dashboard')}
+              className={`px-4 py-3 flex items-center gap-2 border-b-2 transition ${
+                currentView === 'dashboard' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
             >
-              Add First Product
+              <Home className="w-5 h-5" />
+              <span className="font-medium">Dashboard</span>
+            </button>
+            <button
+              onClick={() => setCurrentView('inventory')}
+              className={`px-4 py-3 flex items-center gap-2 border-b-2 transition ${
+                currentView === 'inventory' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Package className="w-5 h-5" />
+              <span className="font-medium">Inventory</span>
+            </button>
+            <button
+              onClick={() => setCurrentView('analytics')}
+              className={`px-4 py-3 flex items-center gap-2 border-b-2 transition ${
+                currentView === 'analytics' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <BarChart3 className="w-5 h-5" />
+              <span className="font-medium">Analytics</span>
             </button>
           </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(groupedProducts).map(([collectionName, products]) => (
-              <div key={collectionName} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                <div className="bg-gray-50 px-5 py-3 border-b border-gray-200">
-                  <div className="flex items-center gap-2">
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
-                    <h2 className="text-lg font-semibold text-gray-900">{collectionName}</h2>
-                    <span className="ml-auto text-sm text-gray-500">{products.length} item(s)</span>
-                  </div>
-                </div>
-                
-                <div className="divide-y divide-gray-200">
-                  {products.map(product => {
-                    const available = getAvailable(product);
-                    return (
-                      <div key={product.id} className="p-5 hover:bg-gray-50 transition">
-                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
-                                <p className="text-sm text-gray-500 mt-1">
-                                  Article No: {product.sku} | {product.subCategory || 'N/A'}
-                                </p>
-                              </div>
-                              <div className="flex gap-1 ml-4">
-                                <button
-                                  onClick={() => openModal(product, 'edit')}
-                                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition"
-                                  title="Edit Product"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteProduct(product)}
-                                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
-                                  title="Delete Product"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-                            
-                            <div className="flex flex-wrap gap-4 mt-3">
-                              <div className="flex items-center gap-2">
-                                <Package className="w-4 h-4 text-gray-400" />
-                                <span className="text-sm text-gray-600">Total:</span>
-                                <span className="font-semibold text-gray-900">{product.totalStock}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Lock className="w-4 h-4 text-gray-400" />
-                                <span className="text-sm text-gray-600">Hold:</span>
-                                <span className="font-semibold text-gray-900">{product.onHold || 0}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Eye className="w-4 h-4 text-gray-400" />
-                                <span className="text-sm text-gray-600">Display:</span>
-                                <span className="font-semibold text-gray-900">{product.onDisplay || 0}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <AlertCircle className="w-4 h-4 text-gray-400" />
-                                <span className="text-sm text-gray-600">Fault:</span>
-                                <span className="font-semibold text-gray-900">{product.onFault || 0}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm text-gray-600">Available:</span>
-                                <span className={`font-bold ${getStockStatus(product)}`}>{available}</span>
-                              </div>
-                            </div>
+        </div>
+      </nav>
 
-                            {available <= product.minStockLevel && available > 0 && (
-                              <div className="mt-2 text-sm text-yellow-600 flex items-center gap-1">
-                                <AlertCircle className="w-4 h-4" />
-                                <span>Low stock - reorder recommended</span>
-                              </div>
-                            )}
-                            {available === 0 && (
-                              <div className="mt-2 text-sm text-red-600 flex items-center gap-1 font-medium">
-                                <AlertCircle className="w-4 h-4" />
-                                <span>Out of stock!</span>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => openModal(product, 'receive')}
-                              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition flex items-center gap-1"
-                            >
-                              <TrendingUp className="w-4 h-4" />
-                              Receive
-                            </button>
-                            <button
-                              onClick={() => openModal(product, 'sell')}
-                              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                              disabled={product.totalStock === 0 || (product.totalStock - (product.onFault || 0)) === 0}
-                            >
-                              <TrendingDown className="w-4 h-4" />
-                              Sell
-                            </button>
-                            <button
-                              onClick={() => openModal(product, 'return')}
-                              className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition"
-                            >
-                              Return
-                            </button>
-                            <button
-                              onClick={() => openModal(product, 'manage')}
-                              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
-                            >
-                              Manage H/D
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Add Product Button */}
-        {products.length > 0 && (
-          <button
-            onClick={() => setShowAddProduct(true)}
-            className="mt-6 w-full py-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-500 hover:text-blue-500 transition flex items-center justify-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            Add New Product
-          </button>
-        )}
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {currentView === 'dashboard' && <DashboardView />}
+        {currentView === 'inventory' && <InventoryView />}
+        {currentView === 'analytics' && <AnalyticsView />}
       </main>
+
+      {/* FAB - Floating Action Button */}
+      <button
+        onClick={() => setShowAddProduct(true)}
+        className="fixed bottom-24 right-6 w-14 h-14 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 hover:scale-110 transition-all flex items-center justify-center z-30"
+        title="Add Product"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+
+      {/* // ==================== PART 8: MODALS - PART 1 ====================
+    // Copy this section after Part 7 */}
 
       {/* Add/Edit Product Modal */}
       {(showAddProduct || modalType === 'edit') && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 my-8">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 my-8">
             <h2 className="text-xl font-bold mb-4">
               {modalType === 'edit' ? 'Edit Product' : 'Add New Product'}
             </h2>
@@ -1010,8 +1321,8 @@ function App() {
                     ? setEditingProduct({...editingProduct, name: e.target.value})
                     : setNewProduct({...newProduct, name: e.target.value})
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., Lismore Diamond Red Wine Set of 2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -1024,8 +1335,8 @@ function App() {
                     ? setEditingProduct({...editingProduct, sku: e.target.value})
                     : setNewProduct({...newProduct, sku: e.target.value})
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g., L136242"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -1035,7 +1346,7 @@ function App() {
                   value={modalType === 'edit' ? editingProduct?.mainCategory : newProduct.mainCategory}
                   onChange={(e) => {
                     const newCat = e.target.value;
-                    const firstSub = MAIN_CATEGORIES[newCat][0];  // 👈 获取第一个子分类
+                    const firstSub = MAIN_CATEGORIES[newCat][0];
                     if (modalType === 'edit') {
                       setEditingProduct({...editingProduct, mainCategory: newCat, subCategory: firstSub});
                     } else {
@@ -1138,8 +1449,17 @@ function App() {
                   setShowAddProduct(false);
                   setModalType(null);
                   setEditingProduct(null);
+                  setNewProduct({
+                    name: '',
+                    sku: '',
+                    mainCategory: 'Collections',
+                    subCategory: MAIN_CATEGORIES['Collections'][0],
+                    totalStock: 0,
+                    minStockLevel: 2,
+                    retailPrice: 0
+                  });
                 }}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
               >
                 Cancel
               </button>
@@ -1147,118 +1467,9 @@ function App() {
           </div>
         </div>
       )}
-      {/* Transaction History Modal */}
-      {showHistory && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Transaction History</h2>
-              <button onClick={() => setShowHistory(false)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
-            </div>
-            
-            {transactions.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">No transactions yet</p>
-            ) : (
-              <div className="space-y-3">
-                {transactions.map(t => (
-                  <div key={t.id} className="border-b pb-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium text-gray-900">{t.productName}</p>
-                        <p className="text-sm text-gray-500">Article No: {t.productSku}</p>
-                      </div>
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        t.type === 'receive' ? 'bg-green-100 text-green-700' :
-                        t.type === 'sell' ? 'bg-blue-100 text-blue-700' :
-                        t.type === 'return' ? 'bg-purple-100 text-purple-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {t.type === 'receive' ? 'Receive' : t.type === 'sell' ? 'Sell' : t.type === 'return' ? 'Return' : 'Manage'}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-sm text-gray-600">
-                      {t.type !== 'manage' && <p>Qty: {t.quantity} ({t.quantityBefore} → {t.quantityAfter})</p>}
-                      {t.notes && <p>Notes: {t.notes}</p>}
-                      <p className="text-xs text-gray-400 mt-1">{formatTime(t.timestamp)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      {/* Fault List Modal */}
-      {showFaultList && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Fault Products</h2>
-              <button onClick={() => setShowFaultList(false)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
-            </div>
-            {products.filter(p => (p.onFault || 0) > 0).length === 0 ? (
-              <p className="text-center text-gray-500 py-8">No faulty products</p>
-            ) : (
-              <div className="space-y-3">
-                {products.filter(p => (p.onFault || 0) > 0).map(p => (
-                  <div key={p.id} className="border-b pb-3">
-                    <p className="font-medium text-gray-900">{p.name}</p>
-                    <p className="text-sm text-gray-500">Article No: {p.sku}</p>
-                    <p className="text-sm text-red-600 font-semibold mt-1">Fault: {p.onFault}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      {/* Low Stock Modal */}
-      {showLowStockList && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-lg w-96 max-h-[80vh] overflow-y-auto p-4">
-            <h2 className="text-lg font-bold mb-3 text-yellow-700 flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-yellow-600" /> Running Low on Stock
-            </h2>
 
-            {products.filter(p => getAvailable(p) <= p.minStockLevel && getAvailable(p) > 0).length === 0 ? (
-              <p>All products are sufficiently stocked.</p>
-            ) : (
-              <ul className="space-y-2">
-                {products
-                  .filter(p => getAvailable(p) <= p.minStockLevel)
-                  .map((p) => (
-                    <li
-                      key={p.id}
-                      className="border rounded-lg p-2 flex justify-between items-center"
-                    >
-                      <div>
-                        <p className="font-medium">{p.name}</p>
-                        <p className="text-sm text-gray-500">
-                          Stock: {getAvailable(p)}
-                        </p>
-                      </div>
-                      <span className="text-red-600 font-semibold">
-                        Min: {p.minStockLevel}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-            )}
-
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setShowLowStockList(false)}
-                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Stock Operation Modal */}
-      {modalType && selectedProduct && modalType !== 'manage' && modalType !== 'edit' && (
+      {/* Stock Operation Modal (Receive/Sell/Return) */}
+      {modalType && selectedProduct && ['receive', 'sell', 'return'].includes(modalType) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h2 className="text-xl font-bold mb-4">
@@ -1278,30 +1489,10 @@ function App() {
               <p className="font-medium">
                 Total: {selectedProduct.totalStock} | Available: {getAvailable(selectedProduct)}
               </p>
-              {modalType === 'sell' && (
-                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-                  <p className="text-xs text-blue-800 font-medium">
-                    Stock Details:
-                  </p>
-                  <p className="text-xs text-blue-700 mt-1">
-                    • Total: {selectedProduct.totalStock} | Hold: {selectedProduct.onHold || 0} | Display: {selectedProduct.onDisplay || 0}
-                  </p>
-                  <p className="text-xs text-blue-700">
-                    • Available (free stock): {getAvailable(selectedProduct)}
-                  </p>
-                  {getAvailable(selectedProduct) === 0 && selectedProduct.totalStock > 0 && (
-                    <p className="text-xs text-yellow-800 mt-1 font-medium">
-                      ⚠️ All items are on Hold/Display. You will be prompted to choose which to sell from.
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Quantity
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
               <input
                 type="number"
                 value={quantity}
@@ -1313,9 +1504,7 @@ function App() {
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Notes
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
               <input
                 type="text"
                 value={notes}
@@ -1342,7 +1531,65 @@ function App() {
           </div>
         </div>
       )}
-      {/* Hold/Display Management Modal */}
+
+      {/* Quick Action Modal (from Dashboard) */}
+      {(modalType === 'quick-receive' || modalType === 'quick-sell') && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">
+              {modalType === 'quick-receive' && 'Receive Stock'}
+              {modalType === 'quick-sell' && 'Process Sale'}
+            </h2>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Article Number *
+              </label>
+              <input
+                type="text"
+                value={quickActionSku}
+                onChange={(e) => setQuickActionSku(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g., L136242"
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quantity *
+              </label>
+              <input
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter quantity"
+                min="1"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleStockOperation}
+                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={closeModal}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+        {/* // ==================== PART 9: MODALS - PART 2 ====================
+      // Copy this section after Part 8 */}
+
+      {/* Manage Hold/Display/Fault Modal */}
       {modalType === 'manage' && selectedProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
@@ -1427,7 +1674,7 @@ function App() {
         </div>
       )}
 
-      {/* Sell分配选择弹窗 */}
+      {/* Sell Breakdown Dialog */}
       {showSellDialog && selectedProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
@@ -1443,7 +1690,7 @@ function App() {
               
               <div className="space-y-3 text-sm">
                 {/* Free Stock Input */}
-                {(selectedProduct.totalStock - (selectedProduct.onHold || 0) - (selectedProduct.onDisplay || 0)) > 0 && (
+                {(selectedProduct.totalStock - (selectedProduct.onHold || 0) - (selectedProduct.onDisplay || 0) - (selectedProduct.onFault || 0)) > 0 && (
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -1454,13 +1701,12 @@ function App() {
                         const maxFree = selectedProduct.totalStock
                           - (selectedProduct.onHold || 0)
                           - (selectedProduct.onDisplay || 0)
-                          - (selectedProduct.onFault || 0); // ← 新
-                        console.log('fromFree changed:', val, 'max:', maxFree);
+                          - (selectedProduct.onFault || 0);
                         setSellBreakdown({...sellBreakdown, fromFree: Math.min(val, maxFree)});
                       }}
                       className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
                     />
-                    <span className="text-gray-700">from Free Stock (max: {selectedProduct.totalStock - (selectedProduct.onHold || 0) - (selectedProduct.onDisplay || 0)})</span>
+                    <span className="text-gray-700">from Free Stock (max: {selectedProduct.totalStock - (selectedProduct.onHold || 0) - (selectedProduct.onDisplay || 0) - (selectedProduct.onFault || 0)})</span>
                   </div>
                 )}
                 
@@ -1529,7 +1775,6 @@ function App() {
                     return;
                   }
 
-                  // 执行销售
                   const newTotal = selectedProduct.totalStock - parseInt(quantity);
                   const newHold = (selectedProduct.onHold || 0) - sellBreakdown.fromHold;
                   const newDisplay = (selectedProduct.onDisplay || 0) - sellBreakdown.fromDisplay;
@@ -1577,6 +1822,84 @@ function App() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Low Stock List Modal */}
+      {showLowStockList && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <AlertCircle className="w-6 h-6 text-yellow-600" />
+                Low Stock Products
+              </h2>
+              <button 
+                onClick={() => setShowLowStockList(false)} 
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            {products.filter(p => getAvailable(p) > 0 && getAvailable(p) <= p.minStockLevel).length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No low stock products</p>
+            ) : (
+              <div className="space-y-3">
+                {products.filter(p => getAvailable(p) > 0 && getAvailable(p) <= p.minStockLevel).map(p => (
+                  <div key={p.id} className="border-b pb-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-medium text-gray-900">{p.name}</p>
+                      <p className="text-sm text-gray-500">Article No: {p.sku}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-yellow-600 font-semibold">Available: {getAvailable(p)}</p>
+                      <p className="text-xs text-gray-500">Min Level: {p.minStockLevel}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Out of Stock List Modal */}
+      {showOutOfStockList && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <TrendingDown className="w-6 h-6 text-red-600" />
+                Out of Stock Products
+              </h2>
+              <button 
+                onClick={() => setShowOutOfStockList(false)} 
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            {products.filter(p => getAvailable(p) === 0).length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No out of stock products</p>
+            ) : (
+              <div className="space-y-3">
+                {products.filter(p => getAvailable(p) === 0).map(p => (
+                  <div key={p.id} className="border-b pb-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-medium text-gray-900">{p.name}</p>
+                      <p className="text-sm text-gray-500">Article No: {p.sku}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-red-600 font-semibold">OUT OF STOCK</p>
+                      <p className="text-xs text-gray-500">Total: {p.totalStock}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
