@@ -1253,40 +1253,42 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
 
       {/* Navigation Tabs */}
       <nav className="bg-white border-b sticky top-[73px] z-10">
-        <div className="max-w-7xl mx-auto px-4">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4"> {/* 手机更窄，桌面还是 px-4 */}
           <div className="flex gap-1">
             <button
               onClick={() => setCurrentView('dashboard')}
-              className={`px-4 py-3 flex items-center gap-2 border-b-2 transition ${
-                currentView === 'dashboard' 
-                  ? 'border-blue-500 text-blue-600' 
+              className={`px-3 sm:px-4 py-3 flex items-center gap-1 sm:gap-2 border-b-2 transition text-sm sm:text-base ${
+                currentView === 'dashboard'
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              <Home className="w-5 h-5" />
-              <span className="font-medium">Dashboard</span>
+              <Home className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="font-medium whitespace-nowrap">Dashboard</span>
             </button>
+
             <button
               onClick={() => setCurrentView('inventory')}
-              className={`px-4 py-3 flex items-center gap-2 border-b-2 transition ${
-                currentView === 'inventory' 
-                  ? 'border-blue-500 text-blue-600' 
+              className={`px-3 sm:px-4 py-3 flex items-center gap-1 sm:gap-2 border-b-2 transition text-sm sm:text-base ${
+                currentView === 'inventory'
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              <Package className="w-5 h-5" />
-              <span className="font-medium">Inventory</span>
+              <Package className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="font-medium whitespace-nowrap">Inventory</span>
             </button>
+
             <button
               onClick={() => setCurrentView('analytics')}
-              className={`px-4 py-3 flex items-center gap-2 border-b-2 transition ${
-                currentView === 'analytics' 
-                  ? 'border-blue-500 text-blue-600' 
+              className={`px-3 sm:px-4 py-3 flex items-center gap-1 sm:gap-2 border-b-2 transition text-sm sm:text-base ${
+                currentView === 'analytics'
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              <BarChart3 className="w-5 h-5" />
-              <span className="font-medium">Analytics</span>
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="font-medium whitespace-nowrap">Analytics</span>
             </button>
           </div>
         </div>
