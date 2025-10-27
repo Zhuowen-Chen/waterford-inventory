@@ -702,41 +702,49 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
   // ========== DASHBOARD VIEW ==========
   const DashboardView = () => (
     <div className="space-y-6">
-      {/* Stats Cards - Single Row - 4 columns on all screens */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* Stats Cards - 响应式设计 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Products */}
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm border border-blue-200 p-4">
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm border border-blue-200 p-3 sm:p-4">
           <div className="flex flex-col items-center text-center">
-            <div className="w-12 h-12 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
-              <Package className="w-6 h-6 text-blue-700" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
+              <Package className="w-5 h-5 sm:w-6 sm:h-6 text-blue-700" />
             </div>
             <p className="text-xs text-blue-700 font-medium mb-1">Total Products</p>
-            <p className="text-3xl font-bold text-blue-900">{stats.totalProducts}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-blue-900 break-all">{stats.totalProducts}</p>
           </div>
         </div>
 
         {/* Total Inventory Value */}
-        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-sm border border-green-200 p-4">
+        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-sm border border-green-200 p-3 sm:p-4">
           <div className="flex flex-col items-center text-center">
-            <div className="w-12 h-12 bg-green-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
-              <TrendingUp className="w-6 h-6 text-green-700" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
+              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
             </div>
             <p className="text-xs text-green-700 font-medium mb-1">Total Value</p>
-            <p className="text-3xl font-bold text-green-900">€{stats.totalValue.toLocaleString()}</p>
+            <p className={`font-bold text-green-900 break-all ${
+              stats.totalValue >= 100000 
+                ? 'text-lg sm:text-xl' 
+                : stats.totalValue >= 10000 
+                ? 'text-xl sm:text-2xl' 
+                : 'text-2xl sm:text-3xl'
+            }`}>
+              €{stats.totalValue.toLocaleString()}
+            </p>
           </div>
         </div>
 
         {/* Low Stock Items - Clickable */}
         <div 
           onClick={() => setShowLowStockList(true)}
-          className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl shadow-sm border border-yellow-200 p-4 cursor-pointer hover:shadow-md transition"
+          className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl shadow-sm border border-yellow-200 p-3 sm:p-4 cursor-pointer hover:shadow-md transition"
         >
           <div className="flex flex-col items-center text-center">
-            <div className="w-12 h-12 bg-yellow-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
-              <AlertCircle className="w-6 h-6 text-yellow-700" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
+              <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-700" />
             </div>
             <p className="text-xs text-yellow-700 font-medium mb-1">Low Stock</p>
-            <p className="text-3xl font-bold text-yellow-900">{stats.lowStock}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-yellow-900 break-all">{stats.lowStock}</p>
             <p className="text-xs text-yellow-600 mt-1 underline">Click to view</p>
           </div>
         </div>
@@ -744,14 +752,14 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
         {/* Out of Stock - Clickable */}
         <div 
           onClick={() => setShowOutOfStockList(true)}
-          className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-sm border border-red-200 p-4 cursor-pointer hover:shadow-md transition"
+          className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-sm border border-red-200 p-3 sm:p-4 cursor-pointer hover:shadow-md transition"
         >
           <div className="flex flex-col items-center text-center">
-            <div className="w-12 h-12 bg-red-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
-              <TrendingDown className="w-6 h-6 text-red-700" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
+              <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-red-700" />
             </div>
             <p className="text-xs text-red-700 font-medium mb-1">Out of Stock</p>
-            <p className="text-3xl font-bold text-red-900">{stats.outOfStock}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-red-900 break-all">{stats.outOfStock}</p>
             <p className="text-xs text-red-600 mt-1 underline">Click to view</p>
           </div>
         </div>
