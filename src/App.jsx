@@ -1,5 +1,4 @@
 // ==================== PART 1: IMPORTS & CONSTANTS ====================
-// Copy this entire section first
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter, BarChart3, Home, ShoppingCart, PieChart, Calendar } from 'lucide-react';
@@ -213,7 +212,6 @@ const InventoryView = ({
 );
 
 // ==================== PART 2 FIXED: COMPONENT START & STATE ====================
-// Replace your Part 2 with this cleaned version
 
 function App() {
   // Auth states
@@ -273,7 +271,6 @@ function App() {
   });
 
 // ==================== PART 3 FIXED: useEffect HOOKS & HELPER FUNCTIONS ====================
-// Replace your Part 3 with this cleaned version
 
   // Check login status
   useEffect(() => {
@@ -410,7 +407,6 @@ function App() {
   };
 
   // ==================== PART 4: PRODUCT OPERATION FUNCTIONS ====================
-// Copy this section after Part 3
 
   // Add Product
   const handleAddProduct = async () => {
@@ -555,7 +551,6 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
   };
 
   // ==================== PART 5: STOCK OPERATION FUNCTIONS ====================
-// Copy this section after Part 4
 
   // Handle Stock Operations (Receive/Sell/Return)
   const handleStockOperation = async () => {
@@ -867,12 +862,11 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
   };
 
   // ==================== PART 6: VIEW COMPONENTS ====================
-// Copy this section after Part 5
 
   // ========== DASHBOARD VIEW ==========
   const DashboardView = () => (
     <div className="space-y-6">
-      {/* Stats Cards - 响应式设计 */}
+      {/* Stats Cards - responsive design */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Products */}
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm border border-blue-200 p-3 sm:p-4">
@@ -1048,11 +1042,11 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
 
   // ========== ANALYTICS VIEW ==========
   const AnalyticsView = () => {
-    // 计算真实的销售数据
+    // Calculate real sales data
     const salesData = useMemo(() => {
       const productSales = {};
       
-      // 统计每个产品的销售数量和金额
+      // Calculate the sales quantity and amount for each product.
       transactions
         .filter(t => t.type === 'sell')
         .forEach(t => {
@@ -1071,7 +1065,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
           productSales[t.productId].totalRevenue += (t.quantity || 0) * (productSales[t.productId].retailPrice || 0);
         });
       
-      // 转换为数组并按销售额排序
+      // Convert to an array and sort by sales amount.
       return Object.values(productSales)
         .sort((a, b) => b.totalRevenue - a.totalRevenue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1128,7 +1122,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
           </div>
         </div>
 
-        {/* 只在有销售数据时显示 Top Selling Products */}
+        {/* Only display when sales data is available. Top Selling Products */}
         {hasSalesData && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
@@ -1164,7 +1158,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
           </div>
         )}
 
-        {/* 如果没有销售数据，显示提示 */}
+        {/* If there is no sales data, display a message. */}
         {!hasSalesData && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
             <div className="text-center">
@@ -1181,7 +1175,6 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
   };
 
   // ==================== PART 7: MAIN RENDER & LOGIN SCREEN ====================
-// Copy this section after Part 6
 
   // Loading state
   if (authLoading) {
@@ -1339,7 +1332,6 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
       </button>
 
       {/* // ==================== PART 8: MODALS - PART 1 ====================
-    // Copy this section after Part 7 */}
 
       {/* Add/Edit Product Modal */}
       {(showAddProduct || modalType === 'edit') && (
@@ -1625,7 +1617,6 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
       )}
 
         {/* // ==================== PART 9: MODALS - PART 2 ====================
-      // Copy this section after Part 8 */}
 
       {/* Manage Hold/Display/Fault Modal */}
       {modalType === 'manage' && selectedProduct && (
