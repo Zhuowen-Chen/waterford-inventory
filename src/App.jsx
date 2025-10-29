@@ -21,6 +21,7 @@ const MAIN_CATEGORIES = {
     'Irish Lace',
     'Copper Coast',
     'Celebration',
+    'Opulence',
     'Connoisseur',
     'Elegance',
     'Elegance Optic',
