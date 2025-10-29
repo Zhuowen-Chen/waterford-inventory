@@ -22,3 +22,17 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables - IMPORTANT!
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# Firebase
+.firebase
+.firebaserc
+firebase-debug.log
+firestore-debug.log
