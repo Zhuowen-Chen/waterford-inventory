@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter, BarChart3, Home, ShoppingCart, PieChart, Calendar } from 'lucide-react';
 import { db, auth } from './firebase';  
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
 // Waterford Collections Structure
@@ -296,47 +296,53 @@ function App() {
     signOut(auth);
   };
 
-  // Load products from Firebase
-  useEffect(() => {
+  // Load products from Firebase (manual load only)
+  const loadProducts = async () => {
     if (!user) return;
-
-    const unsubscribe = onSnapshot(collection(db, 'products'), async (snapshot) => {
+    
+    setLoading(true);
+    try {
+      const snapshot = await getDocs(collection(db, 'products'));
       const productsData = snapshot.docs.map(doc => ({
         id: doc.id,
+        onFault: 0, // 默认值，不写入数据库
         ...doc.data()
       }));
-
-      // Auto-add onFault field for old data
-      for (const p of productsData) {
-        if (p.onFault === undefined) {
-          try {
-            const productRef = doc(db, 'products', p.id);
-            await updateDoc(productRef, { onFault: 0 });
-          } catch (error) {
-            console.error(`Failed to update product ${p.name}:`, error);
-          }
-        }
-      }
-
+      
       setProducts(productsData);
+    } catch (error) {
+      console.error('Failed to load products:', error);
+      alert('Failed to load products. Please check your internet connection.');
+    } finally {
       setLoading(false);
-    });
+    }
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    loadProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Load transactions
-  useEffect(() => {
+  // Load transactions (manual load only)
+  const loadTransactions = async () => {
     if (!user) return;
-    const q = query(collection(db, 'transactions'), orderBy('timestamp', 'desc'), limit(50));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    
+    try {
+      const q = query(collection(db, 'transactions'), orderBy('timestamp', 'desc'), limit(50));
+      const snapshot = await getDocs(q);
       const transactionsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       setTransactions(transactionsData);
-    });
-    return () => unsubscribe();
+    } catch (error) {
+      console.error('Failed to load transactions:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Helper function: Get available stock
@@ -449,6 +455,9 @@ function App() {
       });
       
       alert('Product added successfully!');
+
+      await loadProducts();
+
     } catch (error) {
       console.error('Error adding product:', error);
       alert('Failed to add product');
@@ -493,6 +502,9 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
       setModalType(null);
       setEditingProduct(null);
       alert('Product updated successfully!');
+
+      await loadProducts();
+
     } catch (error) {
       console.error('Error updating product:', error);
       alert('Failed to update product: ' + error.message);
@@ -508,6 +520,9 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
     try {
       await deleteDoc(doc(db, 'products', product.id));
       alert('Product deleted successfully!');
+
+      await loadProducts();
+
     } catch (error) {
       console.error('Error deleting product:', error);
       alert('Failed to delete product');
@@ -777,6 +792,9 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
           });
 
           closeModal();
+
+          await loadProducts();
+
         } catch (error) {
           console.error('Operation failed:', error);
           alert('Operation failed');
@@ -855,6 +873,9 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
       });
 
       closeModal();
+
+      await loadProducts();
+
     } catch (error) {
       console.error('Operation failed:', error);
       alert('Operation failed');
@@ -1249,6 +1270,16 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
               <h1 className="text-2xl font-bold text-gray-900">Waterford Crystal</h1>
               <p className="text-sm text-gray-500">Brown Thomas Concession</p>
             </div>
+            <button 
+              onClick={() => {
+                loadProducts();
+                loadTransactions();
+              }}
+              className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
             <button 
               onClick={handleLogout}
               className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm"
