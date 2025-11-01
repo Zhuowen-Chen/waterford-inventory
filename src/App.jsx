@@ -26,6 +26,7 @@ const MAIN_CATEGORIES = {
     'Elegance Optic',
     'Mixology',
     'Gin Journeys',
+    'Firework, New Year',
     'Marquis',
     'Waterford × Elton John'
   ],
