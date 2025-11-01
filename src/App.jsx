@@ -1,7 +1,7 @@
 // ==================== PART 1: IMPORTS & CONSTANTS ====================
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter, BarChart3, Home, ShoppingCart, PieChart, Calendar } from 'lucide-react';
+import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter, BarChart3, Home, ShoppingCart, PieChart, Calendar, RefreshCw } from 'lucide-react';
 import { db, auth } from './firebase';  
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -68,6 +68,7 @@ const InventoryView = ({
             placeholder="Search products..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            autoComplete="off" 
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -265,6 +266,7 @@ function App() {
     sku: '',
     mainCategory: 'Collections',
     subCategory: MAIN_CATEGORIES['Collections']?.[0] || 'Mastercraft',
+    category: 'Stemware', // 添加这一行
     totalStock: 0,
     minStockLevel: 2,
     retailPrice: 0
@@ -366,8 +368,7 @@ function App() {
       
       return matchesSearch && matchesMain && matchesSub;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products.length, searchTerm, selectedCollection, selectedSubCollection]);
+  }, [products, searchTerm, selectedCollection, selectedSubCollection]);
 
   // Statistics - NEW for Dashboard
   const stats = useMemo(() => {
@@ -377,8 +378,7 @@ function App() {
     const totalValue = products.reduce((sum, p) => sum + (p.totalStock * p.retailPrice), 0);
     
     return { totalProducts, lowStock, outOfStock, totalValue };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products.length]);
+  }, [products]);
 
   // Check duplicate product
   const checkDuplicateProduct = (name, sku, excludeId = null) => {
@@ -433,6 +433,7 @@ function App() {
         sku: newProduct.sku,
         mainCategory: newProduct.mainCategory,
         subCategory: newProduct.subCategory,
+        category: newProduct.category || 'Stemware',
         totalStock: newProduct.totalStock,
         minStockLevel: newProduct.minStockLevel,
         retailPrice: newProduct.retailPrice,
@@ -442,7 +443,9 @@ function App() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      
+    
+      await loadProducts();
+
       setShowAddProduct(false);
       setNewProduct({
         name: '',
@@ -456,8 +459,6 @@ function App() {
       
       alert('Product added successfully!');
 
-      await loadProducts();
-
     } catch (error) {
       console.error('Error adding product:', error);
       alert('Failed to add product');
@@ -470,21 +471,21 @@ function App() {
       alert('Please fill in Product Name and Article Number');
       return;
     }
-
+  
     const onHold = editingProduct.onHold || 0;
     const onDisplay = editingProduct.onDisplay || 0;
     if (editingProduct.totalStock < onHold + onDisplay) {
       alert(`Cannot reduce Total below Hold + Display quantity. 
-Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold + onDisplay}`);
+  Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold + onDisplay}`);
       return;
     }
-
+  
     const duplicateError = checkDuplicateProduct(editingProduct.name, editingProduct.sku, editingProduct.id);
     if (duplicateError) {
       alert(duplicateError);
       return;
     }
-
+  
     try {
       const productRef = doc(db, 'products', editingProduct.id);
       
@@ -493,18 +494,25 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
         sku: editingProduct.sku,
         mainCategory: editingProduct.mainCategory || 'Collections',
         subCategory: editingProduct.subCategory || 'Lismore Diamond',
+        category: editingProduct.category || 'Stemware',
         totalStock: editingProduct.totalStock || 0,
         minStockLevel: editingProduct.minStockLevel || 2,
         retailPrice: editingProduct.retailPrice || 0,
         updatedAt: serverTimestamp()
       });
-
+  
+      setProducts(prevProducts => 
+        prevProducts.map(p => 
+          p.id === editingProduct.id ? { ...editingProduct } : p
+        )
+      );
+  
       setModalType(null);
       setEditingProduct(null);
       alert('Product updated successfully!');
-
+  
       await loadProducts();
-
+  
     } catch (error) {
       console.error('Error updating product:', error);
       alert('Failed to update product: ' + error.message);
@@ -542,7 +550,10 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
       setDisplayValue(product.onDisplay || 0);
       setFaultValue(product.onFault || 0);
     } else if (type === 'edit') {
-      setEditingProduct({...product});
+      setEditingProduct({
+        ...product,
+        category: product.category || 'Stemware'
+      });
     } else if (type === 'sell') {
       setSellBreakdown({
         fromFree: 0,
@@ -566,7 +577,6 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
   };
 
   // ==================== PART 5: STOCK OPERATION FUNCTIONS ====================
-
   // Handle Stock Operations (Receive/Sell/Return)
   const handleStockOperation = async () => {
     // Quick actions from dashboard
@@ -605,8 +615,19 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
             timestamp: serverTimestamp()
           });
 
+          setProducts(prevProducts => 
+            prevProducts.map(p => 
+              p.id === product.id 
+                ? { ...p, totalStock: newTotal }
+                : p
+            )
+          );
+
           alert(`Received ${qty} units of ${product.name}`);
           closeModal();
+
+          await loadProducts();
+
         } catch (error) {
           console.error('Operation failed:', error);
           alert('Operation failed');
@@ -636,8 +657,19 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
             timestamp: serverTimestamp()
           });
 
+          setProducts(prevProducts => 
+            prevProducts.map(p => 
+              p.id === product.id 
+                ? { ...p, totalStock: newTotal }
+                : p
+            )
+          );
+
           alert(`Sold ${qty} units of ${product.name}`);
           closeModal();
+
+          await loadProducts();
+
         } catch (error) {
           console.error('Operation failed:', error);
           alert('Operation failed');
@@ -676,7 +708,18 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
             timestamp: serverTimestamp()
           });
 
+          setProducts(prevProducts => 
+            prevProducts.map(p => 
+              p.id === selectedProduct.id 
+                ? { ...p, totalStock: newTotal }
+                : p
+            )
+          );
+
           closeModal();
+
+          await loadProducts();
+
         } catch (error) {
           console.error('Operation failed:', error);
           alert('Operation failed');
@@ -746,7 +789,18 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
               timestamp: serverTimestamp()
             });
 
+            setProducts(prevProducts => 
+              prevProducts.map(p => 
+                p.id === selectedProduct.id 
+                  ? { ...p, totalStock: Math.max(0, newTotal), onHold: Math.max(0, newHold), onDisplay: Math.max(0, newDisplay) }
+                  : p
+              )
+            );
+
             closeModal();
+
+            await loadProducts();
+
           } catch (error) {
             console.error('Operation failed:', error);
             alert('Operation failed');
@@ -790,6 +844,14 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
             notes: notes || '',
             timestamp: serverTimestamp()
           });
+
+          setProducts(prevProducts => 
+            prevProducts.map(p => 
+              p.id === selectedProduct.id 
+                ? { ...p, totalStock: newTotal }
+                : p
+            )
+          );
 
           closeModal();
 
@@ -871,6 +933,14 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
         notes: `Hold: ${selectedProduct.onHold || 0} → ${newHold}, Display: ${selectedProduct.onDisplay || 0} → ${newDisplay}, Fault: ${selectedProduct.onFault || 0} → ${newFault}`,
         timestamp: serverTimestamp()
       });
+
+      setProducts(prevProducts => 
+        prevProducts.map(p => 
+          p.id === selectedProduct.id 
+            ? { ...p, onHold: newHold, onDisplay: newDisplay, onFault: newFault }
+            : p
+        )
+      );
 
       closeModal();
 
@@ -1090,7 +1160,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
       return Object.values(productSales)
         .sort((a, b) => b.totalRevenue - a.totalRevenue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [transactions.length, products.length]);
+    }, [transactions, products]);
 
     const hasSalesData = salesData.length > 0;
 
@@ -1270,22 +1340,24 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
               <h1 className="text-2xl font-bold text-gray-900">Waterford Crystal</h1>
               <p className="text-sm text-gray-500">Brown Thomas Concession</p>
             </div>
-            <button 
-              onClick={() => {
-                loadProducts();
-                loadTransactions();
-              }}
-              className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh
-            </button>
-            <button 
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm"
-            >
-              Logout
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => {
+                  loadProducts();
+                  loadTransactions();
+                }}
+                className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refresh
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -1383,6 +1455,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                     : setNewProduct({...newProduct, name: e.target.value})
                   }
                   placeholder="e.g., Lismore Diamond Red Wine Set of 2"
+                  autoComplete="off"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -1397,6 +1470,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                     : setNewProduct({...newProduct, sku: e.target.value})
                   }
                   placeholder="e.g., L136242"
+                  autoComplete="off"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -1463,6 +1537,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                     ? setEditingProduct({...editingProduct, totalStock: parseInt(e.target.value) || 0})
                     : setNewProduct({...newProduct, totalStock: parseInt(e.target.value) || 0})
                   }
+                  autoComplete="off"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   min="0"
                 />
@@ -1477,6 +1552,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                     ? setEditingProduct({...editingProduct, minStockLevel: parseInt(e.target.value) || 0})
                     : setNewProduct({...newProduct, minStockLevel: parseInt(e.target.value) || 0})
                   }
+                  autoComplete="off"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   min="0"
                 />
@@ -1491,6 +1567,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                     ? setEditingProduct({...editingProduct, retailPrice: parseFloat(e.target.value) || 0})
                     : setNewProduct({...newProduct, retailPrice: parseFloat(e.target.value) || 0})
                   }
+                  autoComplete="off"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   min="0"
                   step="0.01"
@@ -1515,6 +1592,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                     sku: '',
                     mainCategory: 'Collections',
                     subCategory: MAIN_CATEGORIES['Collections'][0],
+                    category: 'Stemware',
                     totalStock: 0,
                     minStockLevel: 2,
                     retailPrice: 0
@@ -1558,6 +1636,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                 type="number"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
+                autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter quantity"
                 min="1"
@@ -1610,6 +1689,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                 type="text"
                 value={quickActionSku}
                 onChange={(e) => setQuickActionSku(e.target.value)}
+                autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 placeholder="e.g., L136242"
               />
@@ -1623,6 +1703,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                 type="number"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
+                autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter quantity"
                 min="1"
@@ -1677,6 +1758,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                 type="number"
                 value={holdValue}
                 onChange={(e) => setHoldValue(Math.max(0, parseInt(e.target.value) || 0))}
+                autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 min="0"
                 max={selectedProduct.totalStock}
@@ -1689,6 +1771,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                 type="number"
                 value={displayValue}
                 onChange={(e) => setDisplayValue(Math.max(0, parseInt(e.target.value) || 0))}
+                autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 min="0"
                 max={selectedProduct.totalStock}
@@ -1701,6 +1784,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                 type="number"
                 value={faultValue}
                 onChange={(e) => setFaultValue(Math.max(0, parseInt(e.target.value) || 0))}
+                autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 min="0"
                 max={selectedProduct.totalStock}
@@ -1764,6 +1848,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                           - (selectedProduct.onFault || 0);
                         setSellBreakdown({...sellBreakdown, fromFree: Math.min(val, maxFree)});
                       }}
+                      autoComplete="off"
                       className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
                     />
                     <span className="text-gray-700">from Free Stock (max: {selectedProduct.totalStock - (selectedProduct.onHold || 0) - (selectedProduct.onDisplay || 0) - (selectedProduct.onFault || 0)})</span>
@@ -1782,6 +1867,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                         const val = Math.max(0, parseInt(e.target.value) || 0);
                         setSellBreakdown({...sellBreakdown, fromHold: Math.min(val, selectedProduct.onHold || 0)});
                       }}
+                      autoComplete="off"
                       className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
                     />
                     <span className="text-gray-700">from Hold (max: {selectedProduct.onHold || 0})</span>
@@ -1800,6 +1886,7 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                         const val = Math.max(0, parseInt(e.target.value) || 0);
                         setSellBreakdown({...sellBreakdown, fromDisplay: Math.min(val, selectedProduct.onDisplay || 0)});
                       }}
+                      autoComplete="off"
                       className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
                     />
                     <span className="text-gray-700">from Display (max: {selectedProduct.onDisplay || 0})</span>
@@ -1860,8 +1947,19 @@ Currently: Hold=${onHold}, Display=${onDisplay}, Total must be at least ${onHold
                       timestamp: serverTimestamp()
                     });
 
+                    setProducts(prevProducts => 
+                      prevProducts.map(p => 
+                        p.id === selectedProduct.id 
+                          ? { ...p, totalStock: Math.max(0, newTotal), onHold: Math.max(0, newHold), onDisplay: Math.max(0, newDisplay) }
+                          : p
+                      )
+                    );
+
                     setShowSellDialog(false);
                     closeModal();
+
+                    await loadProducts();
+
                   } catch (error) {
                     console.error('Operation failed:', error);
                     alert('Operation failed');
