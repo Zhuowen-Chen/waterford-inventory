@@ -32,13 +32,10 @@ const MAIN_CATEGORIES = {
   ],
   'Christmas': [
     'Holiday Heirlooms',
-    'Winter Wonders',
     'Christmas Mastercraft',
     'Christmas Ornaments',
     'Crystal Ornaments',
     'Festive Accessories',
-    'Christmas Drinkware',
-    'Christmas Gifts'
   ]
 };
 
