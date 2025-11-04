@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter, BarChart3, Home, ShoppingCart, PieChart, Calendar, RefreshCw } from 'lucide-react';
 import { db, auth } from './firebase';  
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
 // Waterford Collections Structure
@@ -625,6 +625,7 @@ function App() {
           closeModal();
 
           await loadProducts();
+          await loadTransactions();
 
         } catch (error) {
           console.error('Operation failed:', error);
@@ -667,6 +668,7 @@ function App() {
           closeModal();
 
           await loadProducts();
+          await loadTransactions();
 
         } catch (error) {
           console.error('Operation failed:', error);
@@ -717,6 +719,7 @@ function App() {
           closeModal();
 
           await loadProducts();
+          await loadTransactions();
 
         } catch (error) {
           console.error('Operation failed:', error);
@@ -798,6 +801,7 @@ function App() {
             closeModal();
 
             await loadProducts();
+            await loadTransactions();
 
           } catch (error) {
             console.error('Operation failed:', error);
@@ -854,6 +858,7 @@ function App() {
           closeModal();
 
           await loadProducts();
+          await loadTransactions();
 
         } catch (error) {
           console.error('Operation failed:', error);
@@ -1162,6 +1167,34 @@ function App() {
 
     const hasSalesData = salesData.length > 0;
 
+    // Clear all sales transactions
+    const handleClearHistory = async () => {
+      if (!confirm('Clear all sales history? This will permanently delete all sales transaction records. This action cannot be undone.')) {
+        return;
+      }
+
+      try {
+        // Query all sell transactions
+        const q = query(collection(db, 'transactions'), where('type', '==', 'sell'));
+        const snapshot = await getDocs(q);
+        
+        // Delete all sell transactions
+        const deletePromises = snapshot.docs.map(docSnapshot => 
+          deleteDoc(doc(db, 'transactions', docSnapshot.id))
+        );
+        
+        await Promise.all(deletePromises);
+        
+        // Reload transactions to update UI
+        await loadTransactions();
+        
+        alert(`Successfully cleared ${snapshot.docs.length} sales records`);
+      } catch (error) {
+        console.error('Failed to clear history:', error);
+        alert('Failed to clear sales history. Please try again.');
+      }
+    };
+
     return (
       <div className="space-y-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -1217,11 +1250,7 @@ function App() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Top Selling Products</h3>
               <button
-                onClick={() => {
-                  if (confirm('Clear all analytics history? This cannot be undone.')) {
-                    alert('Analytics cleared (demo only)');
-                  }
-                }}
+                onClick={handleClearHistory}
                 className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm font-medium"
               >
                 Clear History
@@ -1957,6 +1986,7 @@ function App() {
                     closeModal();
 
                     await loadProducts();
+                    await loadTransactions();
 
                   } catch (error) {
                     console.error('Operation failed:', error);
