@@ -1,6 +1,7 @@
 // ==================== PART 1: IMPORTS & CONSTANTS ====================
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter, BarChart3, Home, ShoppingCart, PieChart, Calendar, RefreshCw } from 'lucide-react';
 import { db, auth } from './firebase';  
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore';
@@ -1136,6 +1137,48 @@ function App() {
 
   // ========== ANALYTICS VIEW ==========
   const AnalyticsView = () => {
+
+    // 添加日期范围状态
+    const [dateRange, setDateRange] = useState('7'); // '1', '7', '30', '180', '365'
+
+    // 计算日期范围的销售数据（按天聚合）
+    const chartData = useMemo(() => {
+      const days = parseInt(dateRange);
+      const now = new Date();
+      const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      
+      // 初始化日期数组
+      const dateMap = {};
+      for (let i = 0; i < days; i++) {
+        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const dateStr = date.toLocaleDateString('en-IE', { month: 'short', day: 'numeric' });
+        dateMap[dateStr] = { date: dateStr, revenue: 0, quantity: 0 };
+      }
+      
+      // 聚合销售数据
+      transactions
+        .filter(t => {
+          if (t.type !== 'sell' || !t.timestamp) return false;
+          const transDate = t.timestamp.toDate();
+          return transDate >= startDate;
+        })
+        .forEach(t => {
+          const transDate = t.timestamp.toDate();
+          const dateStr = transDate.toLocaleDateString('en-IE', { month: 'short', day: 'numeric' });
+          const product = products.find(p => p.id === t.productId);
+          const revenue = (t.quantity || 0) * (product?.retailPrice || 0);
+          
+          if (dateMap[dateStr]) {
+            dateMap[dateStr].revenue += revenue;
+            dateMap[dateStr].quantity += t.quantity || 0;
+          }
+        });
+      
+      // 转换为数组并反转（时间从早到晚）
+      return Object.values(dateMap).reverse();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dateRange, transactions]);
+
     // Calculate real sales data
     const salesData = useMemo(() => {
       const productSales = {};
@@ -1163,7 +1206,7 @@ function App() {
       return Object.values(productSales)
         .sort((a, b) => b.totalRevenue - a.totalRevenue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [transactions, products]);
+    }, [transactions]); 
 
     const hasSalesData = salesData.length > 0;
 
@@ -1200,10 +1243,16 @@ function App() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">Sales Analytics</h2>
-            <select className="px-4 py-2 border border-gray-300 rounded-lg">
-              <option>Last 7 days</option>
-              <option>Last 30 days</option>
-              <option>Last 3 months</option>
+            <select 
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="1">Last 24 hours</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="180">Last 6 months</option>
+              <option value="365">Last year</option>
             </select>
           </div>
 
@@ -1235,13 +1284,55 @@ function App() {
             </div>
           </div>
 
-          <div className="h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
-            <div className="text-center">
-              <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-500">Sales chart visualization</p>
-              <p className="text-sm text-gray-400">Connect to Recharts for detailed analytics</p>
+          {chartData.length > 0 && chartData.some(d => d.revenue > 0) ? (
+            <div className="space-y-6">
+              {/* 营收图表 */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Daily Revenue (€)</h4>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip 
+                      formatter={(value) => `€${value.toLocaleString()}`}
+                      labelStyle={{ color: '#000' }}
+                    />
+                    <Bar dataKey="revenue" fill="#3b82f6" name="Revenue" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              
+              {/* 销量图表 */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Daily Units Sold</h4>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip labelStyle={{ color: '#000' }} />
+                    <Line 
+                      type="monotone" 
+                      dataKey="quantity" 
+                      stroke="#10b981" 
+                      strokeWidth={2}
+                      name="Units Sold"
+                      dot={{ fill: '#10b981' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+              <div className="text-center">
+                <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                <p className="text-gray-500">No sales data in selected period</p>
+                <p className="text-sm text-gray-400">Start selling to see charts here</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Only display when sales data is available. Top Selling Products */}
