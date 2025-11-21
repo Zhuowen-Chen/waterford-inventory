@@ -191,6 +191,12 @@ const InventoryView = ({
                 Return
               </button>
               <button 
+                onClick={() => openModal(product, 'exchange')}
+                className="flex-1 min-w-[70px] px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm"
+              >
+                Exchange
+              </button>
+              <button 
                 onClick={() => openModal(product, 'manage')}
                 className="flex-1 min-w-[70px] px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm"
               >
@@ -237,6 +243,7 @@ function App() {
   const [displayValue, setDisplayValue] = useState(0);
   const [faultValue, setFaultValue] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [discount, setDiscount] = useState(0);
   
   // Modal states
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -357,8 +364,22 @@ function App() {
   // Filter products
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          p.sku.toLowerCase().includes(searchTerm.toLowerCase());
+      // Split search term into keywords
+      const keywords = searchTerm.toLowerCase().trim().split(/\s+/).filter(k => k.length > 0);
+      
+      // If no keywords, match all (or just check collection filters)
+      if (keywords.length === 0) {
+        const mainCat = p.mainCategory || 'Collections';
+        const subCat = p.subCategory || 'Other';
+        const matchesMain = selectedCollection === 'All' || mainCat === selectedCollection;
+        const matchesSub = selectedSubCollection === 'All' || subCat === selectedSubCollection;
+        return matchesMain && matchesSub;
+      }
+      
+      // Check if all keywords appear in name or SKU (in any order)
+      const productText = (p.name + ' ' + p.sku).toLowerCase();
+      const matchesSearch = keywords.every(keyword => productText.includes(keyword));
+      
       const mainCat = p.mainCategory || 'Collections';
       const subCat = p.subCategory || 'Other';
       
@@ -542,6 +563,7 @@ function App() {
     setModalType(type);
     setQuantity('');
     setNotes('');
+    setDiscount(0);
     setQuickActionSku('');
     
     if (type === 'manage') {
@@ -573,6 +595,7 @@ function App() {
     setQuickActionSku('');
     setShowSellDialog(false);
     setSellBreakdown({ fromFree: 0, fromHold: 0, fromDisplay: 0 });
+    setDiscount(0);
   };
 
   // ==================== PART 5: STOCK OPERATION FUNCTIONS ====================
@@ -638,6 +661,12 @@ function App() {
           return;
         }
         const newTotal = product.totalStock - qty;
+        
+        // Calculate price with discount
+        const originalPrice = product.retailPrice * qty;
+        const discountAmount = originalPrice * (discount / 100);
+        const finalPrice = originalPrice - discountAmount;
+        
         try {
           const productRef = doc(db, 'products', product.id);
           await updateDoc(productRef, {
@@ -653,6 +682,9 @@ function App() {
             quantity: qty,
             quantityBefore: product.totalStock,
             quantityAfter: newTotal,
+            discount: discount,
+            originalPrice: originalPrice,
+            finalPrice: finalPrice, 
             notes: notes || '',
             timestamp: serverTimestamp()
           });
@@ -745,6 +777,11 @@ function App() {
         if (onHold > 0) sources.push('hold');
         if (onDisplay > 0) sources.push('display');
 
+        // Calculate sale price with discount
+        const originalPrice = selectedProduct.retailPrice * qty;
+        const discountAmount = originalPrice * (discount / 100);
+        const finalPrice = originalPrice - discountAmount;
+
         // Single source - direct sale
         if (sources.length <= 1) {
           let holdToReduce = 0;
@@ -785,9 +822,12 @@ function App() {
               quantity: qty,
               quantityBefore: selectedProduct.totalStock,
               quantityAfter: newTotal,
+              discount: discount,
+              originalPrice: originalPrice,
+              finalPrice: finalPrice,
               notes: notes || (holdToReduce > 0 || displayToReduce > 0 
-                ? `Reduced Hold by ${holdToReduce}, Display by ${displayToReduce}`
-                : ''),
+                ? `Reduced Hold by ${holdToReduce}, Display by ${displayToReduce}${discount > 0 ? `, Discount: ${discount}%` : ''}`
+                : discount > 0 ? `Discount: ${discount}%` : ''),
               timestamp: serverTimestamp()
             });
 
@@ -829,6 +869,7 @@ function App() {
       
       case 'return': {
         const newTotal = selectedProduct.totalStock + qty;
+        const returnValue = selectedProduct.retailPrice * qty;
         try {
           const productRef = doc(db, 'products', selectedProduct.id);
           await updateDoc(productRef, {
@@ -844,6 +885,7 @@ function App() {
             quantity: qty,
             quantityBefore: selectedProduct.totalStock,
             quantityAfter: newTotal,
+            returnValue: returnValue,
             notes: notes || '',
             timestamp: serverTimestamp()
           });
@@ -861,6 +903,30 @@ function App() {
           await loadProducts();
           await loadTransactions();
 
+        } catch (error) {
+          console.error('Operation failed:', error);
+          alert('Operation failed');
+        }
+        break;
+      }
+
+      case 'exchange': {
+        // Exchange doesn't change total stock, just records the transaction
+        try {
+          await addDoc(collection(db, 'transactions'), {
+            productId: selectedProduct.id,
+            productName: selectedProduct.name,
+            productSku: selectedProduct.sku,
+            type: 'exchange',
+            quantity: qty,
+            notes: notes || 'Exchange transaction',
+            timestamp: serverTimestamp()
+          });
+      
+          closeModal();
+          await loadTransactions();
+          alert(`Exchange recorded for ${qty} unit(s) of ${selectedProduct.name}`);
+      
         } catch (error) {
           console.error('Operation failed:', error);
           alert('Operation failed');
@@ -1147,7 +1213,6 @@ function App() {
       const now = new Date();
       const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       
-      // 初始化日期数组
       const dateMap = {};
       for (let i = 0; i < days; i++) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
@@ -1155,26 +1220,35 @@ function App() {
         dateMap[dateStr] = { date: dateStr, revenue: 0, quantity: 0 };
       }
       
-      // 聚合销售数据
+      // 聚合销售和退货数据
       transactions
         .filter(t => {
-          if (t.type !== 'sell' || !t.timestamp) return false;
+          if ((t.type !== 'sell' && t.type !== 'return') || !t.timestamp) return false;
           const transDate = t.timestamp.toDate();
           return transDate >= startDate;
         })
         .forEach(t => {
           const transDate = t.timestamp.toDate();
           const dateStr = transDate.toLocaleDateString('en-IE', { month: 'short', day: 'numeric' });
-          const product = products.find(p => p.id === t.productId);
-          const revenue = (t.quantity || 0) * (product?.retailPrice || 0);
           
           if (dateMap[dateStr]) {
-            dateMap[dateStr].revenue += revenue;
-            dateMap[dateStr].quantity += t.quantity || 0;
+            if (t.type === 'sell') {
+              const revenue = t.finalPrice !== undefined 
+                ? t.finalPrice 
+                : (t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0);
+              
+              dateMap[dateStr].revenue += revenue;
+              dateMap[dateStr].quantity += t.quantity || 0;
+            } else if (t.type === 'return') {
+              const returnValue = t.returnValue || 
+                ((t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0));
+              
+              dateMap[dateStr].revenue -= returnValue;
+              dateMap[dateStr].quantity -= t.quantity || 0;
+            }
           }
         });
       
-      // 转换为数组并反转（时间从早到晚）
       return Object.values(dateMap).reverse();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dateRange, transactions]);
@@ -1183,10 +1257,8 @@ function App() {
     const salesData = useMemo(() => {
       const productSales = {};
       
-      // Calculate the sales quantity and amount for each product.
-      transactions
-        .filter(t => t.type === 'sell')
-        .forEach(t => {
+      transactions.forEach(t => {
+        if (t.type === 'sell' || t.type === 'return') {
           if (!productSales[t.productId]) {
             const product = products.find(p => p.id === t.productId);
             productSales[t.productId] = {
@@ -1198,15 +1270,29 @@ function App() {
               retailPrice: product?.retailPrice || 0
             };
           }
-          productSales[t.productId].totalQuantity += t.quantity || 0;
-          productSales[t.productId].totalRevenue += (t.quantity || 0) * (productSales[t.productId].retailPrice || 0);
-        });
+          
+          if (t.type === 'sell') {
+            const revenue = t.finalPrice !== undefined 
+              ? t.finalPrice 
+              : (t.quantity || 0) * (productSales[t.productId].retailPrice || 0);
+            
+            productSales[t.productId].totalQuantity += t.quantity || 0;
+            productSales[t.productId].totalRevenue += revenue;
+          } else if (t.type === 'return') {
+            const returnValue = t.returnValue || 
+              ((t.quantity || 0) * (productSales[t.productId].retailPrice || 0));
+            
+            productSales[t.productId].totalQuantity -= t.quantity || 0;
+            productSales[t.productId].totalRevenue -= returnValue;
+          }
+        }
+      });
       
-      // Convert to an array and sort by sales amount.
       return Object.values(productSales)
+        .filter(p => p.totalRevenue > 0)
         .sort((a, b) => b.totalRevenue - a.totalRevenue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [transactions]); 
+    }, [transactions]);
 
     const hasSalesData = salesData.length > 0;
 
@@ -1261,21 +1347,33 @@ function App() {
               <p className="text-sm text-blue-600 font-medium">Total Sales</p>
               <p className="text-2xl font-bold text-blue-900 mt-2">
                 €{transactions
-                  .filter(t => t.type === 'sell')
                   .reduce((sum, t) => {
-                    const product = products.find(p => p.id === t.productId);
-                    return sum + ((t.quantity || 0) * (product?.retailPrice || 0));
+                    if (t.type === 'sell') {
+                      const revenue = t.finalPrice !== undefined 
+                        ? t.finalPrice 
+                        : (t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0);
+                      return sum + revenue;
+                    } else if (t.type === 'return') {
+                      const returnValue = t.returnValue || 
+                        ((t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0));
+                      return sum - returnValue;
+                    }
+                    return sum;
                   }, 0)
                   .toLocaleString()}
               </p>
-              <p className="text-xs text-blue-600 mt-1">Based on transaction records</p>
+              <p className="text-xs text-blue-600 mt-1">Including discounts & returns</p>
             </div>
             <div className="p-4 bg-green-50 rounded-lg">
-              <p className="text-sm text-green-600 font-medium">Units Sold</p>
+              <p className="text-sm text-green-600 font-medium">Net Units Sold</p>
               <p className="text-2xl font-bold text-green-900 mt-2">
-                {transactions.filter(t => t.type === 'sell').reduce((sum, t) => sum + (t.quantity || 0), 0)}
+                {transactions.reduce((sum, t) => {
+                  if (t.type === 'sell') return sum + (t.quantity || 0);
+                  if (t.type === 'return') return sum - (t.quantity || 0);
+                  return sum;
+                }, 0)}
               </p>
-              <p className="text-xs text-green-600 mt-1">Total units</p>
+              <p className="text-xs text-green-600 mt-1">Sales minus returns</p>
             </div>
             <div className="p-4 bg-purple-50 rounded-lg">
               <p className="text-sm text-purple-600 font-medium">Transactions</p>
@@ -1726,13 +1824,14 @@ function App() {
       )}
 
       {/* Stock Operation Modal (Receive/Sell/Return) */}
-      {modalType && selectedProduct && ['receive', 'sell', 'return'].includes(modalType) && (
+      {modalType && selectedProduct && ['receive', 'sell', 'return', 'exchange'].includes(modalType) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h2 className="text-xl font-bold mb-4">
               {modalType === 'receive' && 'Receive Stock'}
               {modalType === 'sell' && 'Sell Product'}
               {modalType === 'return' && 'Return Product'}
+              {modalType === 'exchange' && 'Exchange Product'}
             </h2>
             
             <div className="mb-4">
@@ -1741,12 +1840,14 @@ function App() {
               <p className="text-sm text-gray-500">Article No: {selectedProduct.sku}</p>
             </div>
 
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-1">Current Stock</p>
-              <p className="font-medium">
-                Total: {selectedProduct.totalStock} | Available: {getAvailable(selectedProduct)}
-              </p>
-            </div>
+            {modalType !== 'exchange' && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-1">Current Stock</p>
+                <p className="font-medium">
+                  Total: {selectedProduct.totalStock} | Available: {getAvailable(selectedProduct)}
+                </p>
+              </div>
+            )}
 
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
@@ -1761,6 +1862,50 @@ function App() {
               />
             </div>
 
+            {modalType === 'sell' && (
+              <>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Discount</label>
+                  <select
+                    value={discount}
+                    onChange={(e) => setDiscount(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="0">No Discount</option>
+                    <option value="5">5% Off</option>
+                    <option value="10">10% Off</option>
+                    <option value="15">15% Off</option>
+                    <option value="20">20% Off</option>
+                    <option value="25">25% Off</option>
+                  </select>
+                </div>
+                
+                {quantity && parseInt(quantity) > 0 && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-700">Original Price:</span>
+                      <span className="font-medium">€{(selectedProduct.retailPrice * parseInt(quantity)).toFixed(2)}</span>
+                    </div>
+                    {discount > 0 && (
+                      <>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-700">Discount ({discount}%):</span>
+                          <span className="font-medium text-red-600">-€{((selectedProduct.retailPrice * parseInt(quantity)) * (discount / 100)).toFixed(2)}</span>
+                        </div>
+                        <div className="border-t border-blue-300 my-2"></div>
+                      </>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-blue-900 font-semibold">Final Price:</span>
+                      <span className="text-lg font-bold text-blue-900">
+                        €{((selectedProduct.retailPrice * parseInt(quantity)) * (1 - discount / 100)).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
               <input
@@ -1768,7 +1913,7 @@ function App() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Delivery note / Till Number..."
+                placeholder={modalType === 'exchange' ? 'Exchange details...' : 'Delivery note / Till Number...'}
               />
             </div>
 
@@ -1813,7 +1958,7 @@ function App() {
               />
             </div>
 
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Quantity *
               </label>
@@ -1827,6 +1972,57 @@ function App() {
                 min="1"
               />
             </div>
+
+            {modalType === 'quick-sell' && (
+              <>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Discount
+                  </label>
+                  <select
+                    value={discount}
+                    onChange={(e) => setDiscount(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="0">No Discount</option>
+                    <option value="5">5% Off</option>
+                    <option value="10">10% Off</option>
+                    <option value="15">15% Off</option>
+                    <option value="20">20% Off</option>
+                    <option value="25">25% Off</option>
+                  </select>
+                </div>
+                
+                {quantity && parseInt(quantity) > 0 && quickActionSku && (() => {
+                  const product = products.find(p => p.sku.toLowerCase() === quickActionSku.toLowerCase());
+                  if (!product) return null;
+                  
+                  return (
+                    <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-700">Original Price:</span>
+                        <span className="font-medium">€{(product.retailPrice * parseInt(quantity)).toFixed(2)}</span>
+                      </div>
+                      {discount > 0 && (
+                        <>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-gray-700">Discount ({discount}%):</span>
+                            <span className="font-medium text-red-600">-€{((product.retailPrice * parseInt(quantity)) * (discount / 100)).toFixed(2)}</span>
+                          </div>
+                          <div className="border-t border-blue-300 my-2"></div>
+                        </>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-blue-900 font-semibold">Final Price:</span>
+                        <span className="text-lg font-bold text-blue-900">
+                          €{((product.retailPrice * parseInt(quantity)) * (1 - discount / 100)).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
 
             <div className="flex gap-3">
               <button
@@ -2043,6 +2239,9 @@ function App() {
                   const newTotal = selectedProduct.totalStock - parseInt(quantity);
                   const newHold = (selectedProduct.onHold || 0) - sellBreakdown.fromHold;
                   const newDisplay = (selectedProduct.onDisplay || 0) - sellBreakdown.fromDisplay;
+                  const originalPrice = selectedProduct.retailPrice * parseInt(quantity);
+                  const discountAmount = originalPrice * (discount / 100);
+                  const finalPrice = originalPrice - discountAmount;
 
                   try {
                     const productRef = doc(db, 'products', selectedProduct.id);
@@ -2061,7 +2260,10 @@ function App() {
                       quantity: parseInt(quantity),
                       quantityBefore: selectedProduct.totalStock,
                       quantityAfter: newTotal,
-                      notes: notes || `From: Free=${sellBreakdown.fromFree}, Hold=${sellBreakdown.fromHold}, Display=${sellBreakdown.fromDisplay}`,
+                      discount: discount,
+                      originalPrice: originalPrice,
+                      finalPrice: finalPrice, 
+                      notes: notes || `From: Free=${sellBreakdown.fromFree}, Hold=${sellBreakdown.fromHold}, Display=${sellBreakdown.fromDisplay}${discount > 0 ? `, Discount: ${discount}%` : ''}`,
                       timestamp: serverTimestamp()
                     });
 
