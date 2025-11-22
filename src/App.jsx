@@ -1347,39 +1347,74 @@ function App() {
             <div className="p-4 bg-blue-50 rounded-lg">
               <p className="text-sm text-blue-600 font-medium">Total Sales</p>
               <p className="text-2xl font-bold text-blue-900 mt-2">
-                €{transactions
-                  .reduce((sum, t) => {
-                    if (t.type === 'sell') {
-                      const revenue = t.finalPrice !== undefined 
-                        ? t.finalPrice 
-                        : (t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0);
-                      return sum + revenue;
-                    } else if (t.type === 'return') {
-                      const returnValue = t.returnValue || 
-                        ((t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0));
-                      return sum - returnValue;
-                    }
-                    return sum;
-                  }, 0)
-                  .toLocaleString()}
+                €{(() => {
+                  const days = parseInt(dateRange);
+                  const now = new Date();
+                  const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+                  
+                  return transactions
+                    .filter(t => {
+                      if (!t.timestamp) return false;
+                      const transDate = t.timestamp.toDate();
+                      return transDate >= startDate;
+                    })
+                    .reduce((sum, t) => {
+                      if (t.type === 'sell') {
+                        const revenue = t.finalPrice !== undefined 
+                          ? t.finalPrice 
+                          : (t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0);
+                        return sum + revenue;
+                      } else if (t.type === 'return') {
+                        const returnValue = t.returnValue || 
+                          ((t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0));
+                        return sum - returnValue;
+                      }
+                      return sum;
+                    }, 0)
+                    .toLocaleString();
+                })()}
               </p>
-              <p className="text-xs text-blue-600 mt-1">Including discounts & returns</p>
+              <p className="text-xs text-blue-600 mt-1">In selected period</p>
             </div>
             <div className="p-4 bg-green-50 rounded-lg">
               <p className="text-sm text-green-600 font-medium">Net Units Sold</p>
               <p className="text-2xl font-bold text-green-900 mt-2">
-                {transactions.reduce((sum, t) => {
-                  if (t.type === 'sell') return sum + (t.quantity || 0);
-                  if (t.type === 'return') return sum - (t.quantity || 0);
-                  return sum;
-                }, 0)}
+                {(() => {
+                  const days = parseInt(dateRange);
+                  const now = new Date();
+                  const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+                  
+                  return transactions
+                    .filter(t => {
+                      if (!t.timestamp) return false;
+                      const transDate = t.timestamp.toDate();
+                      return transDate >= startDate;
+                    })
+                    .reduce((sum, t) => {
+                      if (t.type === 'sell') return sum + (t.quantity || 0);
+                      if (t.type === 'return') return sum - (t.quantity || 0);
+                      return sum;
+                    }, 0);
+                })()}
               </p>
-              <p className="text-xs text-green-600 mt-1">Sales minus returns</p>
+              <p className="text-xs text-green-600 mt-1">In selected period</p>
             </div>
             <div className="p-4 bg-purple-50 rounded-lg">
               <p className="text-sm text-purple-600 font-medium">Transactions</p>
-              <p className="text-2xl font-bold text-purple-900 mt-2">{transactions.length}</p>
-              <p className="text-xs text-purple-600 mt-1">All activities</p>
+              <p className="text-2xl font-bold text-purple-900 mt-2">
+                {(() => {
+                  const days = parseInt(dateRange);
+                  const now = new Date();
+                  const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+                  
+                  return transactions.filter(t => {
+                    if (!t.timestamp) return false;
+                    const transDate = t.timestamp.toDate();
+                    return transDate >= startDate;
+                  }).length;
+                })()}
+              </p>
+              <p className="text-xs text-purple-600 mt-1">In selected period</p>
             </div>
           </div>
 
@@ -1878,10 +1913,10 @@ function App() {
                     <option value="15">15% Off</option>
                     <option value="20">20% Off</option>
                     <option value="25">25% Off</option>
-                    <option value="25">30% Off</option>
-                    <option value="25">40% Off</option>
-                    <option value="25">50% Off</option>
-                    <option value="25">60% Off</option>
+                    <option value="30">30% Off</option>
+                    <option value="40">40% Off</option>
+                    <option value="50">50% Off</option>
+                    <option value="60">60% Off</option>
                   </select>
                 </div>
                 
@@ -1995,10 +2030,10 @@ function App() {
                     <option value="15">15% Off</option>
                     <option value="20">20% Off</option>
                     <option value="25">25% Off</option>
-                    <option value="25">30% Off</option>
-                    <option value="25">40% Off</option>
-                    <option value="25">50% Off</option>
-                    <option value="25">60% Off</option>
+                    <option value="30">30% Off</option>
+                    <option value="40">40% Off</option>
+                    <option value="50">50% Off</option>
+                    <option value="60">60% Off</option>
                   </select>
                 </div>
                 
