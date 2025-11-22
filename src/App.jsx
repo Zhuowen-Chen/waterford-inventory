@@ -1206,17 +1206,45 @@ function App() {
   const AnalyticsView = () => {
 
     // 添加日期范围状态
-    const [dateRange, setDateRange] = useState('7'); // '1', '7', '30', '180', '365'
+    const [dateRange, setDateRange] = useState('7'); // '1', '7', '30', '180', '365', 'custom'
+    const [customStartDate, setCustomStartDate] = useState('');
+    const [customEndDate, setCustomEndDate] = useState('');
+
+    // 获取日期范围
+    const getDateRange = () => {
+      const now = new Date();
+      
+      if (dateRange === 'custom') {
+        if (customStartDate && customEndDate) {
+          return {
+            start: new Date(customStartDate + 'T00:00:00'),
+            end: new Date(customEndDate + 'T23:59:59')
+          };
+        }
+        // 如果custom未填完，返回最近7天
+        return {
+          start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+          end: now
+        };
+      }
+      
+      const days = parseInt(dateRange);
+      return {
+        start: new Date(now.getTime() - days * 24 * 60 * 60 * 1000),
+        end: now
+      };
+    };
 
     // 计算日期范围的销售数据（按天聚合）
     const chartData = useMemo(() => {
-      const days = parseInt(dateRange);
-      const now = new Date();
-      const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      const { start: startDate, end: endDate } = getDateRange();
+      
+      // 计算天数
+      const days = Math.ceil((endDate - startDate) / (24 * 60 * 60 * 1000));
       
       const dateMap = {};
-      for (let i = 0; i < days; i++) {
-        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      for (let i = 0; i <= days; i++) {
+        const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
         const dateStr = date.toLocaleDateString('en-IE', { month: 'short', day: 'numeric' });
         dateMap[dateStr] = { date: dateStr, revenue: 0, quantity: 0 };
       }
@@ -1226,7 +1254,7 @@ function App() {
         .filter(t => {
           if ((t.type !== 'sell' && t.type !== 'return') || !t.timestamp) return false;
           const transDate = t.timestamp.toDate();
-          return transDate >= startDate;
+          return transDate >= startDate && transDate <= endDate;
         })
         .forEach(t => {
           const transDate = t.timestamp.toDate();
@@ -1250,9 +1278,9 @@ function App() {
           }
         });
       
-      return Object.values(dateMap).reverse();
+      return Object.values(dateMap);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dateRange, transactions]);
+    }, [dateRange, customStartDate, customEndDate, transactions, products]);
 
     // Calculate real sales data
     const salesData = useMemo(() => {
@@ -1328,19 +1356,50 @@ function App() {
     return (
       <div className="space-y-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
             <h2 className="text-xl font-bold text-gray-900">Sales Analytics</h2>
-            <select 
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg"
-            >
-              <option value="1">Last 24 hours</option>
-              <option value="7">Last 7 days</option>
-              <option value="30">Last 30 days</option>
-              <option value="180">Last 6 months</option>
-              <option value="365">Last year</option>
-            </select>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              <select 
+                value={dateRange}
+                onChange={(e) => {
+                  setDateRange(e.target.value);
+                  if (e.target.value !== 'custom') {
+                    setCustomStartDate('');
+                    setCustomEndDate('');
+                  }
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="1">Last 24 hours</option>
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="180">Last 6 months</option>
+                <option value="365">Last year</option>
+                <option value="custom">Custom Range</option>
+              </select>
+              
+              {dateRange === 'custom' && (
+                <>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    max={customEndDate || new Date().toISOString().split('T')[0]}
+                  />
+                  <span className="text-gray-500 text-sm">to</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    min={customStartDate}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                </>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -1348,15 +1407,13 @@ function App() {
               <p className="text-sm text-blue-600 font-medium">Total Sales</p>
               <p className="text-2xl font-bold text-blue-900 mt-2">
                 €{(() => {
-                  const days = parseInt(dateRange);
-                  const now = new Date();
-                  const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+                  const { start: startDate, end: endDate } = getDateRange();
                   
                   return transactions
                     .filter(t => {
                       if (!t.timestamp) return false;
                       const transDate = t.timestamp.toDate();
-                      return transDate >= startDate;
+                      return transDate >= startDate && transDate <= endDate;
                     })
                     .reduce((sum, t) => {
                       if (t.type === 'sell') {
@@ -1380,15 +1437,13 @@ function App() {
               <p className="text-sm text-green-600 font-medium">Net Units Sold</p>
               <p className="text-2xl font-bold text-green-900 mt-2">
                 {(() => {
-                  const days = parseInt(dateRange);
-                  const now = new Date();
-                  const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+                  const { start: startDate, end: endDate } = getDateRange();
                   
                   return transactions
                     .filter(t => {
                       if (!t.timestamp) return false;
                       const transDate = t.timestamp.toDate();
-                      return transDate >= startDate;
+                      return transDate >= startDate && transDate <= endDate;
                     })
                     .reduce((sum, t) => {
                       if (t.type === 'sell') return sum + (t.quantity || 0);
@@ -1403,14 +1458,12 @@ function App() {
               <p className="text-sm text-purple-600 font-medium">Transactions</p>
               <p className="text-2xl font-bold text-purple-900 mt-2">
                 {(() => {
-                  const days = parseInt(dateRange);
-                  const now = new Date();
-                  const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+                  const { start: startDate, end: endDate } = getDateRange();
                   
                   return transactions.filter(t => {
                     if (!t.timestamp) return false;
                     const transDate = t.timestamp.toDate();
-                    return transDate >= startDate;
+                    return transDate >= startDate && transDate <= endDate;
                   }).length;
                 })()}
               </p>
