@@ -1877,6 +1877,10 @@ function App() {
                     <option value="15">15% Off</option>
                     <option value="20">20% Off</option>
                     <option value="25">25% Off</option>
+                    <option value="25">30% Off</option>
+                    <option value="25">40% Off</option>
+                    <option value="25">50% Off</option>
+                    <option value="25">60% Off</option>
                   </select>
                 </div>
                 
@@ -1990,6 +1994,10 @@ function App() {
                     <option value="15">15% Off</option>
                     <option value="20">20% Off</option>
                     <option value="25">25% Off</option>
+                    <option value="25">30% Off</option>
+                    <option value="25">40% Off</option>
+                    <option value="25">50% Off</option>
+                    <option value="25">60% Off</option>
                   </select>
                 </div>
                 
