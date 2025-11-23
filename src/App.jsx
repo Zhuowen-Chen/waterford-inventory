@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter, BarChart3, Home, ShoppingCart, PieChart, Calendar, RefreshCw } from 'lucide-react';
+import { Search, Plus, Package, TrendingUp, TrendingDown, AlertCircle, Eye, Lock, History, Edit2, Trash2, ChevronRight, Filter, BarChart3, Home, ShoppingCart, PieChart, Calendar, RefreshCw, Users } from 'lucide-react';
 import { db, auth } from './firebase';  
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -233,6 +233,7 @@ function App() {
   // Data states
   const [products, setProducts] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [footfallRecords, setFootfallRecords] = useState([]);
   
   // UI states
   const [searchTerm, setSearchTerm] = useState('');
@@ -249,6 +250,7 @@ function App() {
   // Modal states
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showFootfallModal, setShowFootfallModal] = useState(false);
   const [showLowStockList, setShowLowStockList] = useState(false);
   const [showOutOfStockList, setShowOutOfStockList] = useState(false);
   const [showSellDialog, setShowSellDialog] = useState(false);
@@ -260,6 +262,9 @@ function App() {
   // Edit states
   const [editingProduct, setEditingProduct] = useState(null);
   const [quickActionSku, setQuickActionSku] = useState('');
+
+  // footfall count
+  const [footfallCount, setFootfallCount] = useState('');
   
   // Sell breakdown state
   const [sellBreakdown, setSellBreakdown] = useState({
@@ -349,10 +354,78 @@ function App() {
     }
   };
 
+  // Loading people flow records
+  const loadFootfallRecords = async () => {
+    if (!user) return;
+    
+    try {
+      const q = query(
+        collection(db, 'footfall'), 
+        orderBy('timestamp', 'desc'), 
+        limit(100)
+      );
+      const snapshot = await getDocs(q);
+      const footfallData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setFootfallRecords(footfallData);
+    } catch (error) {
+      console.error('Failed to load footfall records:', error);
+    }
+  };
+
   useEffect(() => {
     loadTransactions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Save flow records
+  const handleSaveFootfall = async (count) => {
+    if (!count || count <= 0) {
+      alert('Please enter a valid count');
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // "2024-11-23"
+      const hour = now.getHours(); // 0-23
+
+      await addDoc(collection(db, 'footfall'), {
+        date: dateStr,
+        hour: hour,
+        count: parseInt(count),
+        timestamp: serverTimestamp()
+      });
+
+      await loadFootfallRecords();
+      
+      setShowFootfallModal(false);
+      setFootfallCount('');
+      alert(`Recorded ${count} visitors`);
+
+    } catch (error) {
+      console.error('Failed to save footfall:', error);
+      alert('Failed to save footfall record');
+    }
+  };
+
+  // Get the total number of people in the current hour
+  const getCurrentHourFootfall = () => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const today = now.toISOString().split('T')[0];
+    
+    return footfallRecords
+      .filter(r => {
+        if (!r.timestamp) return false;
+        const recordDate = r.timestamp.toDate();
+        const recordDateStr = recordDate.toISOString().split('T')[0];
+        return recordDateStr === today && r.hour === currentHour;
+      })
+      .reduce((sum, r) => sum + (r.count || 0), 0);
+  };
 
   // Helper function: Get available stock
   const getAvailable = (product) => {
@@ -1190,6 +1263,15 @@ function App() {
             <ShoppingCart className="w-6 h-6 text-purple-600 mx-auto mb-2 group-hover:scale-110 transition" />
             <span className="text-sm font-medium text-purple-900">Process Sale</span>
           </button>
+
+          <button 
+            onClick={() => setShowFootfallModal(true)}
+            className="p-4 bg-pink-50 hover:bg-pink-100 rounded-lg transition text-center group"
+          >
+            <Users className="w-6 h-6 text-pink-600 mx-auto mb-2 group-hover:scale-110 transition" />
+            <span className="text-sm font-medium text-pink-900">Record Footfall</span>
+          </button>
+
           <button 
             onClick={() => setCurrentView('analytics')}
             className="p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition text-center group"
@@ -1399,6 +1481,94 @@ function App() {
                   />
                 </>
               )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {/* Total Footfall */}
+            <div className="p-4 bg-pink-50 rounded-lg">
+              <p className="text-sm text-pink-600 font-medium">Total Footfall</p>
+              <p className="text-2xl font-bold text-pink-900 mt-2">
+                {(() => {
+                  const { start: startDate, end: endDate } = getDateRange();
+                  
+                  return footfallRecords
+                    .filter(r => {
+                      if (!r.timestamp) return false;
+                      const recordDate = r.timestamp.toDate();
+                      return recordDate >= startDate && recordDate <= endDate;
+                    })
+                    .reduce((sum, r) => sum + (r.count || 0), 0);
+                })()}
+              </p>
+              <p className="text-xs text-pink-600 mt-1">Visitors in period</p>
+            </div>
+            
+            {/* Conversion Rate */}
+            <div className="p-4 bg-green-50 rounded-lg">
+              <p className="text-sm text-green-600 font-medium">Conversion Rate</p>
+              <p className="text-2xl font-bold text-green-900 mt-2">
+                {(() => {
+                  const { start: startDate, end: endDate } = getDateRange();
+                  
+                  const totalFootfall = footfallRecords
+                    .filter(r => {
+                      if (!r.timestamp) return false;
+                      const recordDate = r.timestamp.toDate();
+                      return recordDate >= startDate && recordDate <= endDate;
+                    })
+                    .reduce((sum, r) => sum + (r.count || 0), 0);
+                  
+                  const totalSales = transactions
+                    .filter(t => {
+                      if (t.type !== 'sell' || !t.timestamp) return false;
+                      const transDate = t.timestamp.toDate();
+                      return transDate >= startDate && transDate <= endDate;
+                    })
+                    .length;
+                  
+                  return totalFootfall > 0 
+                    ? ((totalSales / totalFootfall) * 100).toFixed(2) 
+                    : '0.00';
+                })()}%
+              </p>
+              <p className="text-xs text-green-600 mt-1">Sales / Visitors</p>
+            </div>
+            
+            {/* Avg Sale per Visitor */}
+            <div className="p-4 bg-orange-50 rounded-lg">
+              <p className="text-sm text-orange-600 font-medium">Avg Sale/Visitor</p>
+              <p className="text-2xl font-bold text-orange-900 mt-2">
+                €{(() => {
+                  const { start: startDate, end: endDate } = getDateRange();
+                  
+                  const totalFootfall = footfallRecords
+                    .filter(r => {
+                      if (!r.timestamp) return false;
+                      const recordDate = r.timestamp.toDate();
+                      return recordDate >= startDate && recordDate <= endDate;
+                    })
+                    .reduce((sum, r) => sum + (r.count || 0), 0);
+                  
+                  const totalRevenue = transactions
+                    .filter(t => {
+                      if (t.type !== 'sell' || !t.timestamp) return false;
+                      const transDate = t.timestamp.toDate();
+                      return transDate >= startDate && transDate <= endDate;
+                    })
+                    .reduce((sum, t) => {
+                      if (t.type === 'sell') {
+                        return sum + (t.finalPrice !== undefined ? t.finalPrice : 0);
+                      }
+                      return sum;
+                    }, 0);
+                  
+                  return totalFootfall > 0 
+                    ? (totalRevenue / totalFootfall).toFixed(2) 
+                    : '0.00';
+                })()}
+              </p>
+              <p className="text-xs text-orange-600 mt-1">Revenue / Visitor</p>
             </div>
           </div>
 
@@ -1650,6 +1820,7 @@ function App() {
                 onClick={() => {
                   loadProducts();
                   loadTransactions();
+                  loadFootfallRecords();
                 }}
                 className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm flex items-center gap-2"
               >
@@ -2476,6 +2647,84 @@ function App() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Footfall Modal - 添加在所有 Modal 的最后 */}
+      {showFootfallModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Users className="w-6 h-6 text-pink-600" />
+              Record Footfall
+            </h2>
+            
+            {/* 快速按钮 */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <button 
+                onClick={() => handleSaveFootfall(1)}
+                className="px-4 py-3 bg-pink-50 rounded-lg hover:bg-pink-100 transition"
+              >
+                <p className="text-2xl font-bold text-pink-600">+1</p>
+              </button>
+              <button 
+                onClick={() => handleSaveFootfall(5)}
+                className="px-4 py-3 bg-pink-50 rounded-lg hover:bg-pink-100 transition"
+              >
+                <p className="text-2xl font-bold text-pink-600">+5</p>
+              </button>
+              <button 
+                onClick={() => handleSaveFootfall(10)}
+                className="px-4 py-3 bg-pink-50 rounded-lg hover:bg-pink-100 transition"
+              >
+                <p className="text-2xl font-bold text-pink-600">+10</p>
+              </button>
+            </div>
+            
+            {/* 自定义输入 */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Custom Count
+              </label>
+              <input
+                type="number"
+                value={footfallCount}
+                onChange={(e) => setFootfallCount(e.target.value)}
+                min="1"
+                autoComplete="off"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500"
+                placeholder="Enter footfall count..."
+              />
+            </div>
+            
+            {/* 当前小时统计 */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">Current Hour Total</p>
+              <p className="text-2xl font-bold text-gray-900">{getCurrentHourFootfall()}</p>
+              <p className="text-xs text-gray-500">
+                {new Date().toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleSaveFootfall(footfallCount)}
+                disabled={!footfallCount || parseInt(footfallCount) <= 0}
+                className="flex-1 px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setShowFootfallModal(false);
+                  setFootfallCount('');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
