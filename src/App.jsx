@@ -1504,13 +1504,14 @@ function App() {
               <p className="text-xs text-pink-600 mt-1">Visitors in period</p>
             </div>
             
-            {/* Conversion Rate */}
+            {/* Conversion Rate - 修复版 */}
             <div className="p-4 bg-green-50 rounded-lg">
               <p className="text-sm text-green-600 font-medium">Conversion Rate</p>
               <p className="text-2xl font-bold text-green-900 mt-2">
                 {(() => {
                   const { start: startDate, end: endDate } = getDateRange();
                   
+                  // 计算人流
                   const totalFootfall = footfallRecords
                     .filter(r => {
                       if (!r.timestamp) return false;
@@ -1519,6 +1520,7 @@ function App() {
                     })
                     .reduce((sum, r) => sum + (r.count || 0), 0);
                   
+                  // 计算销售笔数（假设每笔是不同客户）
                   const totalSales = transactions
                     .filter(t => {
                       if (t.type !== 'sell' || !t.timestamp) return false;
@@ -1527,21 +1529,36 @@ function App() {
                     })
                     .length;
                   
-                  return totalFootfall > 0 
-                    ? ((totalSales / totalFootfall) * 100).toFixed(2) 
-                    : '0.00';
+                  if (totalFootfall === 0) return '0.00';
+                  
+                  // 转化率最高100%（如果销售笔数 > 访客数，说明有回头客或一个客户多次购买）
+                  const rate = (totalSales / totalFootfall) * 100;
+                  return Math.min(100, rate).toFixed(2);
                 })()}%
               </p>
-              <p className="text-xs text-green-600 mt-1">Sales / Visitors</p>
+              <p className="text-xs text-green-600 mt-1">
+                {(() => {
+                  const { start: startDate, end: endDate } = getDateRange();
+                  const totalSales = transactions
+                    .filter(t => {
+                      if (t.type !== 'sell' || !t.timestamp) return false;
+                      const transDate = t.timestamp.toDate();
+                      return transDate >= startDate && transDate <= endDate;
+                    })
+                    .length;
+                  return `${totalSales} sales / visitors`;
+                })()}
+              </p>
             </div>
             
-            {/* Avg Sale per Visitor */}
+            {/* Avg Sale per Visitor - 修复版 */}
             <div className="p-4 bg-orange-50 rounded-lg">
               <p className="text-sm text-orange-600 font-medium">Avg Sale/Visitor</p>
               <p className="text-2xl font-bold text-orange-900 mt-2">
                 €{(() => {
                   const { start: startDate, end: endDate } = getDateRange();
                   
+                  // 计算人流
                   const totalFootfall = footfallRecords
                     .filter(r => {
                       if (!r.timestamp) return false;
@@ -1550,22 +1567,32 @@ function App() {
                     })
                     .reduce((sum, r) => sum + (r.count || 0), 0);
                   
+                  // 计算净销售额（销售 - 退货）
                   const totalRevenue = transactions
                     .filter(t => {
-                      if (t.type !== 'sell' || !t.timestamp) return false;
+                      if (!t.timestamp) return false;
                       const transDate = t.timestamp.toDate();
                       return transDate >= startDate && transDate <= endDate;
                     })
                     .reduce((sum, t) => {
                       if (t.type === 'sell') {
-                        return sum + (t.finalPrice !== undefined ? t.finalPrice : 0);
+                        // 使用 finalPrice（含折扣）或计算原价
+                        const revenue = t.finalPrice !== undefined 
+                          ? t.finalPrice 
+                          : (t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0);
+                        return sum + revenue;
+                      } else if (t.type === 'return') {
+                        // 退货减少营收
+                        const returnValue = t.returnValue || 
+                          ((t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0));
+                        return sum - returnValue;
                       }
                       return sum;
                     }, 0);
                   
-                  return totalFootfall > 0 
-                    ? (totalRevenue / totalFootfall).toFixed(2) 
-                    : '0.00';
+                  if (totalFootfall === 0) return '0.00';
+                  
+                  return (totalRevenue / totalFootfall).toFixed(2);
                 })()}
               </p>
               <p className="text-xs text-orange-600 mt-1">Revenue / Visitor</p>
