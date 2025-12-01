@@ -1317,7 +1317,7 @@ function App() {
       };
     };
 
-    // 计算日期范围的销售数据（按天聚合）
+    // 计算日期范围的销售数据(按天聚合)
     const chartData = useMemo(() => {
       const { start: startDate, end: endDate } = getDateRange();
       
@@ -1331,32 +1331,47 @@ function App() {
         dateMap[dateStr] = { date: dateStr, revenue: 0, quantity: 0 };
       }
       
-      // 聚合销售和退货数据
+      // 聚合销售和退货数据 - 添加更严格的验证
       transactions
         .filter(t => {
-          if ((t.type !== 'sell' && t.type !== 'return') || !t.timestamp) return false;
-          const transDate = t.timestamp.toDate();
-          return transDate >= startDate && transDate <= endDate;
+          // 严格验证数据
+          if (!t || (t.type !== 'sell' && t.type !== 'return') || !t.timestamp) return false;
+          
+          try {
+            // 确保timestamp可以转换为日期
+            if (typeof t.timestamp.toDate !== 'function') return false;
+            const transDate = t.timestamp.toDate();
+            if (!(transDate instanceof Date) || isNaN(transDate.getTime())) return false;
+            
+            return transDate >= startDate && transDate <= endDate;
+          } catch (e) {
+            console.warn('Invalid transaction timestamp:', t.id, e);
+            return false;
+          }
         })
         .forEach(t => {
-          const transDate = t.timestamp.toDate();
-          const dateStr = transDate.toLocaleDateString('en-IE', { month: 'short', day: 'numeric' });
-          
-          if (dateMap[dateStr]) {
-            if (t.type === 'sell') {
-              const revenue = t.finalPrice !== undefined 
-                ? t.finalPrice 
-                : (t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0);
-              
-              dateMap[dateStr].revenue += revenue;
-              dateMap[dateStr].quantity += t.quantity || 0;
-            } else if (t.type === 'return') {
-              const returnValue = t.returnValue || 
-                ((t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0));
-              
-              dateMap[dateStr].revenue -= returnValue;
-              dateMap[dateStr].quantity -= t.quantity || 0;
+          try {
+            const transDate = t.timestamp.toDate();
+            const dateStr = transDate.toLocaleDateString('en-IE', { month: 'short', day: 'numeric' });
+            
+            if (dateMap[dateStr]) {
+              if (t.type === 'sell') {
+                const revenue = t.finalPrice !== undefined 
+                  ? t.finalPrice 
+                  : (t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0);
+                
+                dateMap[dateStr].revenue += revenue;
+                dateMap[dateStr].quantity += t.quantity || 0;
+              } else if (t.type === 'return') {
+                const returnValue = t.returnValue || 
+                  ((t.quantity || 0) * (products.find(p => p.id === t.productId)?.retailPrice || 0));
+                
+                dateMap[dateStr].revenue -= returnValue;
+                dateMap[dateStr].quantity -= t.quantity || 0;
+              }
             }
+          } catch (e) {
+            console.warn('Error processing transaction:', t.id, e);
           }
         });
       
