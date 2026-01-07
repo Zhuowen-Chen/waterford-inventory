@@ -464,15 +464,14 @@ function App() {
     });
   }, [products, searchTerm, selectedCollection, selectedSubCollection]);
 
-  // Statistics - NEW for Dashboard
-  const stats = useMemo(() => {
-    const totalProducts = products.length;
-    const lowStock = products.filter(p => getAvailable(p) > 0 && getAvailable(p) <= p.minStockLevel).length;
-    const outOfStock = products.filter(p => getAvailable(p) === 0).length;
-    const totalValue = products.reduce((sum, p) => sum + (p.totalStock * p.retailPrice), 0);
-    
-    return { totalProducts, lowStock, outOfStock, totalValue };
-  }, [products]);
+  // Statistics - NEW for Dashboard - Total value and Total Project
+  const stats = {
+    totalProducts: products.length,
+    totalStockCount: products.reduce((sum, p) => sum + p.totalStock, 0),  // 新增这一行
+    lowStock: products.filter(p => getAvailable(p) > 0 && getAvailable(p) <= p.minStockLevel).length,
+    outOfStock: products.filter(p => getAvailable(p) === 0).length,
+    totalValue: products.reduce((sum, p) => sum + (p.totalStock * p.retailPrice), 0)
+  };
 
   // Check duplicate product
   const checkDuplicateProduct = (name, sku, excludeId = null) => {
@@ -538,7 +537,7 @@ function App() {
         updatedAt: serverTimestamp()
       });
     
-      await loadProducts();
+      await loadProducts(); // Don't delete
 
       setShowAddProduct(false);
       setNewProduct({
@@ -605,8 +604,6 @@ function App() {
       setEditingProduct(null);
       alert('Product updated successfully!');
   
-      await loadProducts();
-  
     } catch (error) {
       console.error('Error updating product:', error);
       alert('Failed to update product: ' + error.message);
@@ -623,7 +620,7 @@ function App() {
       await deleteDoc(doc(db, 'products', product.id));
       alert('Product deleted successfully!');
 
-      await loadProducts();
+      await loadProducts(); // Don't delete
 
     } catch (error) {
       console.error('Error deleting product:', error);
@@ -722,7 +719,6 @@ function App() {
           alert(`Received ${qty} units of ${product.name}`);
           closeModal();
 
-          await loadProducts();
           await loadTransactions();
 
         } catch (error) {
@@ -774,7 +770,6 @@ function App() {
           alert(`Sold ${qty} units of ${product.name}`);
           closeModal();
 
-          await loadProducts();
           await loadTransactions();
 
         } catch (error) {
@@ -825,7 +820,6 @@ function App() {
 
           closeModal();
 
-          await loadProducts();
           await loadTransactions();
 
         } catch (error) {
@@ -915,7 +909,6 @@ function App() {
 
             closeModal();
 
-            await loadProducts();
             await loadTransactions();
 
           } catch (error) {
@@ -974,7 +967,6 @@ function App() {
 
           closeModal();
 
-          await loadProducts();
           await loadTransactions();
 
         } catch (error) {
@@ -1088,8 +1080,6 @@ function App() {
 
       closeModal();
 
-      await loadProducts();
-
     } catch (error) {
       console.error('Operation failed:', error);
       alert('Operation failed');
@@ -1102,7 +1092,7 @@ function App() {
   const DashboardView = () => (
     <div className="space-y-6">
       {/* Stats Cards - responsive design */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Total Products */}
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm border border-blue-200 p-3 sm:p-4">
           <div className="flex flex-col items-center text-center">
@@ -1111,6 +1101,18 @@ function App() {
             </div>
             <p className="text-xs text-blue-700 font-medium mb-1">Total Products</p>
             <p className="text-2xl sm:text-3xl font-bold text-blue-900 break-all">{stats.totalProducts}</p>
+          </div>
+        </div>
+
+        {/* Total Stock Count */}
+        <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl shadow-sm border border-indigo-200 p-3 sm:p-4">
+          <div className="flex flex-col items-center text-center">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-500 bg-opacity-20 rounded-xl flex items-center justify-center mb-2">
+              <Package className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-700" />
+            </div>
+            <p className="text-xs text-indigo-700 font-medium mb-1">Total Stock</p>
+            <p className="text-2xl sm:text-3xl font-bold text-indigo-900 break-all">{stats.totalStockCount}</p>
+            <p className="text-xs text-indigo-600 mt-1">units</p>
           </div>
         </div>
 
@@ -2588,7 +2590,6 @@ function App() {
                     setShowSellDialog(false);
                     closeModal();
 
-                    await loadProducts();
                     await loadTransactions();
 
                   } catch (error) {
