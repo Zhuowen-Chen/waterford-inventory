@@ -438,10 +438,11 @@ function App() {
     if (!user) return;
     
     try {
-      const q = query(collection(db, 'transactions'), orderBy('timestamp', 'desc'), limit(50));
+      const q = query(collection(db, 'transactions'), orderBy('timestamp', 'desc'), limit(200));
       const snapshot = await getDocs(q);
       const transactionsData = snapshot.docs.map(doc => ({
         id: doc.id,
+        archived: false,  // 默认值
         ...doc.data()
       }));
       setTransactions(transactionsData);
@@ -1323,6 +1324,8 @@ function App() {
   // ========== ANALYTICS VIEW ==========
   const AnalyticsView = () => {
 
+    const [showArchived, setShowArchived] = useState(false);
+
     // 添加日期范围状态
     const [dateRange, setDateRange] = useState('7'); // '1', '7', '30', '180', '365', 'custom'
     const [customStartDate, setCustomStartDate] = useState('');
@@ -1370,6 +1373,9 @@ function App() {
       // 聚合销售和退货数据 - 添加更严格的验证
       transactions
         .filter(t => {
+          // 添加归档过滤
+          if (!showArchived && t.archived) return false;
+
           // 严格验证数据
           if (!t || (t.type !== 'sell' && t.type !== 'return') || !t.timestamp) return false;
           
@@ -1413,13 +1419,16 @@ function App() {
       
       return Object.values(dateMap);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dateRange, customStartDate, customEndDate, transactions, products]);
+    }, [dateRange, customStartDate, customEndDate, transactions, products, showArchived]);
 
     // Calculate real sales data
     const salesData = useMemo(() => {
       const productSales = {};
       
       transactions.forEach(t => {
+        // 添加归档过滤
+        if (!showArchived && t.archived) return;
+
         if (t.type === 'sell' || t.type === 'return') {
           if (!productSales[t.productId]) {
             const product = products.find(p => p.id === t.productId);
@@ -1454,35 +1463,34 @@ function App() {
         .filter(p => p.totalRevenue > 0)
         .sort((a, b) => b.totalRevenue - a.totalRevenue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [transactions]);
+    }, [transactions, products, showArchived]);
 
     const hasSalesData = salesData.length > 0;
 
     // Clear all sales transactions
-    const handleClearHistory = async () => {
-      if (!confirm('Clear all sales history? This will permanently delete all sales transaction records. This action cannot be undone.')) {
+    const handleArchiveHistory = async () => {
+      if (!confirm('Archive all sales history? This will hide current sales records from the chart, but you can view them anytime by clicking "Show Archived".')) {
         return;
       }
-
+    
       try {
-        // Query all sell transactions
-        const q = query(collection(db, 'transactions'), where('type', '==', 'sell'));
+        const q = query(collection(db, 'transactions'), where('type', '==', 'sell'), where('archived', '!=', true));
         const snapshot = await getDocs(q);
         
-        // Delete all sell transactions
-        const deletePromises = snapshot.docs.map(docSnapshot => 
-          deleteDoc(doc(db, 'transactions', docSnapshot.id))
+        const updatePromises = snapshot.docs.map(docSnapshot => 
+          updateDoc(doc(db, 'transactions', docSnapshot.id), {
+            archived: true,
+            archivedAt: serverTimestamp()
+          })
         );
         
-        await Promise.all(deletePromises);
-        
-        // Reload transactions to update UI
+        await Promise.all(updatePromises);
         await loadTransactions();
         
-        alert(`Successfully cleared ${snapshot.docs.length} sales records`);
+        alert(`Successfully archived ${snapshot.docs.length} sales records`);
       } catch (error) {
-        console.error('Failed to clear history:', error);
-        alert('Failed to clear sales history. Please try again.');
+        console.error('Failed to archive history:', error);
+        alert('Failed to archive sales history. Please try again.');
       }
     };
 
@@ -1775,12 +1783,20 @@ function App() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Top Selling Products</h3>
-              <button
-                onClick={handleClearHistory}
-                className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm font-medium"
-              >
-                Clear History
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowArchived(!showArchived)}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
+                >
+                  {showArchived ? 'Hide Archived' : 'Show Archived'}
+                </button>
+                <button
+                  onClick={handleArchiveHistory}
+                  className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition text-sm font-medium"
+                >
+                  Archive Current
+                </button>
+              </div>
             </div>
             <div className="space-y-3">
               {salesData.slice(0, 10).map((item, i) => (
