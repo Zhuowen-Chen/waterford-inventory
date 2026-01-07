@@ -1416,8 +1416,6 @@ function App() {
             console.warn('Error processing transaction:', t.id, e);
           }
         });
-
-        
       
       return Object.values(dateMap);
     // eslint-disable-next-line react-hooks/exhaustive-deps
