@@ -56,167 +56,256 @@ const InventoryView = ({
   filteredProducts,
   getAvailable,
   openModal,
-  handleDeleteProduct
-}) => (
-  <div className="space-y-6">
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-      <div className="flex gap-3">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            autoComplete="off" 
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition flex items-center gap-2"
-        >
-          <Filter className="w-5 h-5" />
-          Filter
-        </button>
-      </div>
-
-      {showFilters && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
-          <select
-            value={selectedCollection}
-            onChange={(e) => {
-              setSelectedCollection(e.target.value);
-              setSelectedSubCollection('All');
-            }}
-            className="px-3 py-2 border border-gray-300 rounded-lg"
-          >
-            <option value="All">All Collections</option>
-            {Object.keys(MAIN_CATEGORIES).map(col => (
-              <option key={col} value={col}>{col}</option>
-            ))}
-          </select>
-          <select
-            value={selectedSubCollection}
-            onChange={(e) => setSelectedSubCollection(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg"
-            disabled={selectedCollection === 'All'}
-          >
-            <option value="All">All Sub-Collections</option>
-            {selectedCollection !== 'All' && MAIN_CATEGORIES[selectedCollection]?.map(sub => (
-              <option key={sub} value={sub}>{sub}</option>
-            ))}
-          </select>
-        </div>
-      )}
-    </div>
-
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {filteredProducts.map(product => {
-        const available = getAvailable(product);
-        return (
-          <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-900">{product.name}</h3>
-                <p className="text-sm text-gray-500 mt-1">{product.sku} • {product.subCategory}</p>
-              </div>
-              <div className="flex gap-1">
-                <button 
-                  onClick={() => openModal(product, 'edit')}
-                  className="p-2 text-gray-400 hover:text-blue-600 rounded"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => handleDeleteProduct(product)}
-                  className="p-2 text-gray-400 hover:text-red-600 rounded"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-5 gap-2 mb-4">
-              <div className="text-center p-2 bg-gray-50 rounded">
-                <p className="text-xs text-gray-500">Total</p>
-                <p className="font-bold text-gray-900">{product.totalStock}</p>
-              </div>
-              <div className="text-center p-2 bg-blue-50 rounded">
-                <p className="text-xs text-blue-600">Hold</p>
-                <p className="font-bold text-blue-900">{product.onHold}</p>
-              </div>
-              <div className="text-center p-2 bg-purple-50 rounded">
-                <p className="text-xs text-purple-600">Display</p>
-                <p className="font-bold text-purple-900">{product.onDisplay}</p>
-              </div>
-              <div className="text-center p-2 bg-red-50 rounded">
-                <p className="text-xs text-red-600">Fault</p>
-                <p className="font-bold text-red-900">{product.onFault || 0}</p>
-              </div>
-              <div className="text-center p-2 bg-green-50 rounded">
-                <p className="text-xs text-green-600">Available</p>
-                <p className={`font-bold ${available === 0 ? 'text-red-600' : available <= product.minStockLevel ? 'text-yellow-600' : 'text-green-600'}`}>
-                  {available}
-                </p>
-              </div>
-            </div>
-
-            {available <= product.minStockLevel && (
-              <div className={`mb-3 p-2 rounded text-sm flex items-center gap-2 ${
-                available === 0 ? 'bg-red-50 text-red-700' : 'bg-yellow-50 text-yellow-700'
-              }`}>
-                <AlertCircle className="w-4 h-4" />
-                {available === 0 ? 'Out of stock!' : 'Low stock - reorder recommended'}
-              </div>
-            )}
-
-            <div className="flex gap-2 flex-wrap">
-              <button 
-                onClick={() => openModal(product, 'receive')}
-                className="flex-1 min-w-[70px] px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm"
-              >
-                Receive
-              </button>
-              <button 
-                onClick={() => openModal(product, 'sell')}
-                className="flex-1 min-w-[70px] px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm disabled:opacity-50"
-                disabled={available === 0}
-              >
-                Sell
-              </button>
-              <button 
-                onClick={() => openModal(product, 'return')}
-                className="flex-1 min-w-[70px] px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm"
-              >
-                Return
-              </button>
-              <button 
-                onClick={() => openModal(product, 'exchange')}
-                className="flex-1 min-w-[70px] px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm"
-              >
-                Exchange
-              </button>
-              <button 
-                onClick={() => openModal(product, 'manage')}
-                className="flex-1 min-w-[70px] px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm"
-              >
-                Manage
-              </button>
-            </div>
+  handleDeleteProduct,
+  openDropdown,
+  setOpenDropdown
+}) => {
+  return (
+    <div className="space-y-6">
+      {/* Search and Filter Bar */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex gap-3">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              autoComplete="off" 
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
           </div>
-        );
-      })}
-    </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition flex items-center gap-2"
+          >
+            <Filter className="w-5 h-5" />
+            Filter
+          </button>
+        </div>
 
-    {filteredProducts.length === 0 && (
-      <div className="text-center py-12">
-        <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <p className="text-gray-500">No products found</p>
+        {showFilters && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
+            <select
+              value={selectedCollection}
+              onChange={(e) => {
+                setSelectedCollection(e.target.value);
+                setSelectedSubCollection('All');
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="All">All Collections</option>
+              {Object.keys(MAIN_CATEGORIES).map(col => (
+                <option key={col} value={col}>{col}</option>
+              ))}
+            </select>
+            <select
+              value={selectedSubCollection}
+              onChange={(e) => setSelectedSubCollection(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg"
+              disabled={selectedCollection === 'All'}
+            >
+              <option value="All">All Sub-Collections</option>
+              {selectedCollection !== 'All' && MAIN_CATEGORIES[selectedCollection]?.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
-    )}
-  </div>
-);
+
+      {/* Table View */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Collection</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Level</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredProducts.map(product => {
+                const available = getAvailable(product);
+                const isLowStock = available > 0 && available <= product.minStockLevel;
+                const isOutOfStock = available === 0;
+                
+                return (
+                  <tr key={product.id} className="hover:bg-gray-50 transition">
+                    {/* Product */}
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="font-medium text-gray-900">{product.name}</p>
+                        <p className="text-sm text-gray-500">Article No: {product.sku}</p>
+                      </div>
+                    </td>
+                    
+                    {/* Collection */}
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-gray-700">{product.subCategory}</span>
+                    </td>
+                    
+                    {/* Price */}
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-medium text-gray-900">€{product.retailPrice.toFixed(2)}</span>
+                    </td>
+                    
+                    {/* Stock Level */}
+                    <td className="px-6 py-4">
+                      <div className="text-sm">
+                        <p className="font-semibold text-gray-900">
+                          Total: {product.totalStock} 
+                          <span className="text-gray-400 mx-1">|</span>
+                          Available: <span className={available === 0 ? 'text-red-600' : available <= product.minStockLevel ? 'text-yellow-600' : 'text-green-600'}>
+                            {available}
+                          </span>
+                        </p>
+                        {(product.onHold > 0 || product.onDisplay > 0 || product.onFault > 0) && (
+                          <p className="text-gray-500 text-xs mt-1">
+                            {product.onHold > 0 && `Hold: ${product.onHold}`}
+                            {product.onHold > 0 && product.onDisplay > 0 && ', '}
+                            {product.onDisplay > 0 && `Display: ${product.onDisplay}`}
+                            {(product.onHold > 0 || product.onDisplay > 0) && product.onFault > 0 && ', '}
+                            {product.onFault > 0 && `Fault: ${product.onFault}`}
+                          </p>
+                        )}
+                      </div>
+                    </td>
+                    
+                    {/* Status */}
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        isOutOfStock ? 'bg-red-100 text-red-800' :
+                        isLowStock ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {isOutOfStock ? '⚠️ Out of Stock' : isLowStock ? '⚠️ Low Stock' : '✓ Healthy'}
+                      </span>
+                    </td>
+                    
+                    {/* Actions */}
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openModal(product, 'sell')}
+                          disabled={available === 0}
+                          className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          SELL
+                        </button>
+                        
+                        {/* Dropdown Menu */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setOpenDropdown(openDropdown === product.id ? null : product.id)}
+                            className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                          >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                            </svg>
+                          </button>
+                          
+                          {openDropdown === product.id && (
+                            <>
+                              {/* Backdrop */}
+                              <div 
+                                className="fixed inset-0 z-10" 
+                                onClick={() => setOpenDropdown(null)}
+                              />
+                              
+                              {/* Dropdown */}
+                              <div className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+                                <div className="py-1">
+                                  <button
+                                    onClick={() => {
+                                      openModal(product, 'receive');
+                                      setOpenDropdown(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                  >
+                                    <TrendingUp className="w-4 h-4 text-green-600" />
+                                    Receive Stock
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      openModal(product, 'return');
+                                      setOpenDropdown(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                  >
+                                    <TrendingDown className="w-4 h-4 text-purple-600" />
+                                    Return
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      openModal(product, 'exchange');
+                                      setOpenDropdown(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                  >
+                                    <RefreshCw className="w-4 h-4 text-orange-600" />
+                                    Exchange
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      openModal(product, 'manage');
+                                      setOpenDropdown(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                  >
+                                    <Package className="w-4 h-4 text-gray-600" />
+                                    Manage Hold/Display
+                                  </button>
+                                  <div className="border-t border-gray-100 my-1"></div>
+                                  <button
+                                    onClick={() => {
+                                      openModal(product, 'edit');
+                                      setOpenDropdown(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                  >
+                                    <Edit2 className="w-4 h-4 text-blue-600" />
+                                    Edit Product
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      handleDeleteProduct(product);
+                                      setOpenDropdown(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete Product
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {filteredProducts.length === 0 && (
+          <div className="text-center py-12">
+            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">No products found</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // ==================== PART 2 FIXED: COMPONENT START & STATE ====================
 
@@ -272,6 +361,9 @@ function App() {
     fromHold: 0,
     fromDisplay: 0
   });
+
+  // Dropdown menu state
+  const [openDropdown, setOpenDropdown] = useState(null);
 
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -491,18 +583,6 @@ function App() {
     }
     
     return null;
-  };
-
-  // Format timestamp for display
-  const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-    const date = timestamp.toDate();
-    return date.toLocaleString('en-IE', { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
   };
 
   // ==================== PART 4: PRODUCT OPERATION FUNCTIONS ====================
@@ -1874,6 +1954,8 @@ function App() {
             getAvailable={getAvailable}
             openModal={openModal}
             handleDeleteProduct={handleDeleteProduct}
+            openDropdown={openDropdown}
+            setOpenDropdown={setOpenDropdown}
           />
         )}
         {currentView === 'analytics' && <AnalyticsView />}
