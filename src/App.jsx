@@ -365,6 +365,10 @@ function App() {
   // Dropdown menu state
   const [openDropdown, setOpenDropdown] = useState(null);
 
+  // Custom timestamp for historical data entry
+  const [customTimestamp, setCustomTimestamp] = useState('');
+  const [useCustomTime, setUseCustomTime] = useState(false);
+
   const [newProduct, setNewProduct] = useState({
     name: '',
     sku: '',
@@ -716,6 +720,8 @@ function App() {
     setNotes('');
     setDiscount(0);
     setQuickActionSku('');
+    setUseCustomTime(false);
+    setCustomTimestamp(''); 
     
     if (type === 'manage') {
       setHoldValue(product.onHold || 0);
@@ -747,6 +753,8 @@ function App() {
     setShowSellDialog(false);
     setSellBreakdown({ fromFree: 0, fromHold: 0, fromDisplay: 0 });
     setDiscount(0);
+    setUseCustomTime(false);
+    setCustomTimestamp('');
   };
 
   // ==================== PART 5: STOCK OPERATION FUNCTIONS ====================
@@ -785,7 +793,9 @@ function App() {
             quantityBefore: product.totalStock,
             quantityAfter: newTotal,
             notes: notes || '',
-            timestamp: serverTimestamp()
+            timestamp: useCustomTime && customTimestamp 
+              ? new Date(customTimestamp) 
+              : serverTimestamp()
           });
 
           setProducts(prevProducts => 
@@ -836,7 +846,9 @@ function App() {
             originalPrice: originalPrice,
             finalPrice: finalPrice, 
             notes: notes || '',
-            timestamp: serverTimestamp()
+            timestamp: useCustomTime && customTimestamp 
+              ? new Date(customTimestamp) 
+              : serverTimestamp()
           });
 
           setProducts(prevProducts => 
@@ -887,7 +899,9 @@ function App() {
             quantityBefore: selectedProduct.totalStock,
             quantityAfter: newTotal,
             notes: notes || '',
-            timestamp: serverTimestamp()
+            timestamp: useCustomTime && customTimestamp 
+              ? new Date(customTimestamp) 
+              : serverTimestamp()
           });
 
           setProducts(prevProducts => 
@@ -976,7 +990,9 @@ function App() {
               notes: notes || (holdToReduce > 0 || displayToReduce > 0 
                 ? `Reduced Hold by ${holdToReduce}, Display by ${displayToReduce}${discount > 0 ? `, Discount: ${discount}%` : ''}`
                 : discount > 0 ? `Discount: ${discount}%` : ''),
-              timestamp: serverTimestamp()
+              timestamp: useCustomTime && customTimestamp 
+                ? new Date(customTimestamp) 
+                : serverTimestamp()
             });
 
             setProducts(prevProducts => 
@@ -1034,7 +1050,9 @@ function App() {
             quantityAfter: newTotal,
             returnValue: returnValue,
             notes: notes || '',
-            timestamp: serverTimestamp()
+            timestamp: useCustomTime && customTimestamp 
+              ? new Date(customTimestamp) 
+              : serverTimestamp()
           });
 
           setProducts(prevProducts => 
@@ -1066,7 +1084,9 @@ function App() {
             type: 'exchange',
             quantity: qty,
             notes: notes || 'Exchange transaction',
-            timestamp: serverTimestamp()
+            timestamp: useCustomTime && customTimestamp 
+              ? new Date(customTimestamp) 
+              : serverTimestamp()
           });
       
           closeModal();
@@ -2230,6 +2250,29 @@ function App() {
               </>
             )}
           
+            {/* Custom Timestamp Option */}
+            <div className="mb-4">
+              <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useCustomTime}
+                  onChange={(e) => setUseCustomTime(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">Use custom date/time</span>
+              </label>
+              
+              {useCustomTime && (
+                <input
+                  type="datetime-local"
+                  value={customTimestamp}
+                  onChange={(e) => setCustomTimestamp(e.target.value)}
+                  max={new Date().toISOString().slice(0, 16)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              )}
+            </div>
+
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
               <input
@@ -2295,6 +2338,29 @@ function App() {
                 placeholder="Enter quantity"
                 min="1"
               />
+            </div>
+
+            {/* Custom Timestamp Option */}
+            <div className="mb-4">
+              <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useCustomTime}
+                  onChange={(e) => setUseCustomTime(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">Use custom date/time</span>
+              </label>
+              
+              {useCustomTime && (
+                <input
+                  type="datetime-local"
+                  value={customTimestamp}
+                  onChange={(e) => setCustomTimestamp(e.target.value)}
+                  max={new Date().toISOString().slice(0, 16)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              )}
             </div>
 
             {modalType === 'quick-sell' && (
@@ -2592,7 +2658,9 @@ function App() {
                       originalPrice: originalPrice,
                       finalPrice: finalPrice, 
                       notes: notes || `From: Free=${sellBreakdown.fromFree}, Hold=${sellBreakdown.fromHold}, Display=${sellBreakdown.fromDisplay}${discount > 0 ? `, Discount: ${discount}%` : ''}`,
-                      timestamp: serverTimestamp()
+                      timestamp: useCustomTime && customTimestamp 
+                        ? new Date(customTimestamp) 
+                        : serverTimestamp()
                     });
 
                     setProducts(prevProducts => 
