@@ -117,7 +117,7 @@ const InventoryView = ({
 
       {/* Table View */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -294,6 +294,166 @@ const InventoryView = ({
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View - Hidden on desktop */}
+        <div className="lg:hidden divide-y divide-gray-200">
+          {filteredProducts.map(product => {
+            const available = getAvailable(product);
+            const isLowStock = available > 0 && available <= product.minStockLevel;
+            const isOutOfStock = available === 0;
+            
+            return (
+              <div key={product.id} className="p-4 hover:bg-gray-50 transition">
+                {/* Header: Product Name & Status */}
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900 text-base">{product.name}</h3>
+                    <p className="text-sm text-gray-500 mt-1">{product.sku}</p>
+                    <p className="text-xs text-gray-400 mt-1">{product.subCategory}</p>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ml-2 ${
+                    isOutOfStock ? 'bg-red-100 text-red-800' :
+                    isLowStock ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-green-100 text-green-800'
+                  }`}>
+                    {isOutOfStock ? '⚠️ Out' : isLowStock ? '⚠️ Low' : '✓'}
+                  </span>
+                </div>
+
+                {/* Price & Stock Info */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <p className="text-xs text-gray-500">Price</p>
+                    <p className="text-base font-semibold text-gray-900">€{product.retailPrice.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Available</p>
+                    <p className={`text-base font-semibold ${
+                      available === 0 ? 'text-red-600' : 
+                      available <= product.minStockLevel ? 'text-yellow-600' : 
+                      'text-green-600'
+                    }`}>
+                      {available} / {product.totalStock}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Hold/Display/Fault Info */}
+                {(product.onHold > 0 || product.onDisplay > 0 || product.onFault > 0) && (
+                  <div className="flex gap-2 text-xs text-gray-600 mb-3 flex-wrap">
+                    {product.onHold > 0 && (
+                      <span className="px-2 py-1 bg-blue-50 rounded">Hold: {product.onHold}</span>
+                    )}
+                    {product.onDisplay > 0 && (
+                      <span className="px-2 py-1 bg-purple-50 rounded">Display: {product.onDisplay}</span>
+                    )}
+                    {product.onFault > 0 && (
+                      <span className="px-2 py-1 bg-red-50 rounded">Fault: {product.onFault}</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openModal(product, 'sell')}
+                    disabled={available === 0}
+                    className="flex-1 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    SELL
+                  </button>
+                  
+                  {/* Dropdown Menu */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setOpenDropdown(openDropdown === product.id ? null : product.id)}
+                      className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 border border-gray-300"
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                      </svg>
+                    </button>
+                    
+                    {openDropdown === product.id && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-10" 
+                          onClick={() => setOpenDropdown(null)}
+                        />
+                        
+                        <div className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+                          <div className="py-1">
+                            <button
+                              onClick={() => {
+                                openModal(product, 'receive');
+                                setOpenDropdown(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <TrendingUp className="w-4 h-4 text-green-600" />
+                              Receive Stock
+                            </button>
+                            <button
+                              onClick={() => {
+                                openModal(product, 'return');
+                                setOpenDropdown(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <TrendingDown className="w-4 h-4 text-purple-600" />
+                              Return
+                            </button>
+                            <button
+                              onClick={() => {
+                                openModal(product, 'exchange');
+                                setOpenDropdown(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <RefreshCw className="w-4 h-4 text-orange-600" />
+                              Exchange
+                            </button>
+                            <button
+                              onClick={() => {
+                                openModal(product, 'manage');
+                                setOpenDropdown(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <Package className="w-4 h-4 text-gray-600" />
+                              Manage Hold/Display
+                            </button>
+                            <div className="border-t border-gray-100 my-1"></div>
+                            <button
+                              onClick={() => {
+                                openModal(product, 'edit');
+                                setOpenDropdown(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <Edit2 className="w-4 h-4 text-blue-600" />
+                              Edit Product
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleDeleteProduct(product);
+                                setOpenDropdown(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete Product
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {filteredProducts.length === 0 && (
